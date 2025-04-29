@@ -1,0 +1,48 @@
+# Environment variables and secrets
+.env
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# User states and runtime data
+user_states.json
+message_history.json
+state_backups/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+Thumbs.db
+
+# Local testing
+test_*.py
+test_*.json
+temp_*.txt

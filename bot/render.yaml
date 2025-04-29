@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: ghost-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: RENDER
+        value: "true"
+    healthCheckPath: /health
+    autoDeploy: true
+    size: Starter

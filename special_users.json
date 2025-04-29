@@ -1,0 +1,17 @@
+{
+    "swastik": {
+        "variants": ["swastikgoomber", "swasgoomber", "swastik"],
+        "role": "vip",
+        "context": "loves potatoes and willing participant in choccy milk heist"
+    },
+    "notpaddy": {
+        "variants": ["notpaddy", "notpaddy_", "paddy"],
+        "role": "mod",
+        "context": "Age: 26\nPronouns: He/him\nLikes: Games (CRPGs, Strategy, etc.), Software Engineering, Cooking, Whisky, Music (Metal, Hip-Hop)\nDislikes: Drama (duh), Savoy Cabbage, the dreadful feeling of jamais-vu\nExtras: Apparently we talk about height in here so: 6f 6inch. Also not really a streamer"
+    },
+    "lilly": {
+        "variants": ["lillyyen", "lillyyenvt", "lilly"],
+        "role": "mother",
+        "context": "This is your mother/captain. You respect her (though sometimes reluctantly) and have a special bond with her."
+    }
+}
