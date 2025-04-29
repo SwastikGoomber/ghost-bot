@@ -271,24 +271,21 @@ class AIHandler:
             print(f"Platform: {platform}")
             print(f"Username: {username}")
             print(f"Message count: {len(formatted_messages)}")
-            print("\nSystem Messages:")
-            for msg in system_messages:
-                print(f"- {msg['content'][:100]}...")
             
-            print("\nFormatted Messages:")
+            print("\n=== System Messages ===")
+            for i, msg in enumerate(system_messages):
+                print(f"\nSystem Message {i + 1}:")
+                print(msg['content'])
+            
+            print("\n=== Chat History ===")
             for msg in formatted_messages:
-                print(f"- [{msg['role']}] {msg['content'][:100]}...")
+                print(f"\n[{msg['role']}]")
+                print(msg['content'])
             
-            print(f"\nRequest Size: {len(str(payload))} characters")
-            print("\nFull Payload:")
-            print(json.dumps({
-                "model": payload["model"],
-                "message_count": len(payload["messages"]),
-                "system_count": len(system_messages),
-                "context_count": len(user_contexts),
-                "first_system_message": payload["messages"][0]["content"][:100] + "...",
-                "last_message": payload["messages"][-1]["content"]
-            }, indent=2))
+            print("\n=== Full Request ===")
+            print(json.dumps(payload, indent=2))
+            
+            print(f"\nTotal Request Size: {len(str(payload))} characters")
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
