@@ -14,7 +14,7 @@ logger = setup_logging()
 # Simple HTTP server for health checks
 from aiohttp import web
 
-async def health_check():
+async def health_check(request):
     """Basic health check endpoint"""
     return web.Response(text='OK')
 

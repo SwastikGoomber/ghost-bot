@@ -6,30 +6,18 @@ import os
 import re
 import traceback
 import json
-from config import (
-    OPENROUTER_CHAT_KEY,
-    OPENROUTER_SUMMARY_KEY,
-    BOT_PERSONA,
-    PLATFORM_SETTINGS,
-    BOT_NAME,
-    IDLE_MESSAGES,
-    SLEEP_RESPONSES
-)
-
-# Add debug prints
-print("Current working directory:", os.getcwd())
-print("Python path:", sys.path)
-
 try:
     from config import (
         OPENROUTER_CHAT_KEY,
         OPENROUTER_SUMMARY_KEY,
         BOT_PERSONA,
-        PLATFORM_SETTINGS
+        PLATFORM_SETTINGS,
+        BOT_NAME,
+        IDLE_MESSAGES,
+        SLEEP_RESPONSES
     )
-    print("Successfully imported config variables")
 except Exception as e:
-    print(f"Error importing from config: {e}")
+    print(f"Config Error: {e}")
     raise
 
 import random
@@ -66,8 +54,6 @@ class AIResponseError(Exception):
 
 class AIHandler:
     def __init__(self):
-        print("Initializing AIHandler")
-        print(f"PLATFORM_SETTINGS available: {PLATFORM_SETTINGS is not None}")
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
         self.chat_headers = {
             "Authorization": f"Bearer {OPENROUTER_CHAT_KEY}",
@@ -78,8 +64,8 @@ class AIHandler:
             "Content-Type": "application/json"
         }
         
-        # Load special users data
-        self.special_users = self.load_special_users()  # Load from JSON file
+        print("=== Initializing Bot ===")
+        self.special_users = self.load_special_users()
 
     def load_special_users(self) -> Dict:
         try:
@@ -126,26 +112,12 @@ class AIHandler:
         found_users = set()
         message = message.lower()
         
-        # Check for @mentions
-        mentions = re.findall(r'@(\w+)', message)
-        for mention in mentions:
-            mention = mention.lower()
-            # Check if mention matches any variant
-            if mention in self.variant_lookup:
-                found_users.add(self.variant_lookup[mention])
-        
-        # Check for username matches in text
-        words = message.split()
+        # Check both @mentions and regular text
+        words = re.findall(r'@?\w+', message)
         for word in words:
-            # Remove common punctuation
-            clean_word = re.sub(r'[,.!?]$', '', word.lower())
-            if clean_word in self.variant_lookup:
-                found_users.add(self.variant_lookup[clean_word])
-        
-        print(f"Username extraction debug:")
-        print(f"Message: {message}")
-        print(f"Found primary users: {found_users}")
-        print(f"Variant lookup: {self.variant_lookup}")
+            word = word.lstrip('@').strip()
+            if word in self.variant_lookup:
+                found_users.add(self.variant_lookup[word])
         
         return list(found_users)
 
@@ -184,63 +156,47 @@ class AIHandler:
         return "\n".join(formatted)
 
     def clean_response(self, text: str) -> str:
-        # Remove common AI patterns
+        # Remove common patterns and formatting
         text = text.replace("USER:", "").replace("ASSISTANT:", "").strip()
         text = text.replace("*", "").strip()
-        
-        # Remove "Ghost:" prefix and quotes, including the bracketed version
         text = re.sub(r'\[Ghost\]:', '', text, flags=re.IGNORECASE)
         text = text.replace('Ghost:', '').strip()
         text = text.strip('"').strip("'")
         
-        # Remove self-generated questions
+        # Take first line only
         if "\n" in text:
             text = text.split("\n")[0]
         
-        # Remove any explanation of actions or emotions
-        text = re.sub(r'\([^)]*\)', '', text)
-        
-        # Remove excessive punctuation and emojis
-        text = re.sub(r'([!?.]){2,}', r'\1', text)
-        text = re.sub(r'[\U0001F300-\U0001F9FF]', '', text)
+        # Clean formatting
+        text = re.sub(r'\([^)]*\)', '', text)  # Remove parentheses
+        text = re.sub(r'([!?.]){2,}', r'\1', text)  # Fix punctuation
+        text = re.sub(r'[\U0001F300-\U0001F9FF]', '', text)  # Remove emojis
         
         return text.strip()
 
     async def get_chat_response(self, user_state: Dict) -> str:
         try:
-            print("\n=== SPECIAL USERS DEBUG ===")
-            print(f"Loaded special users: {self.special_users}")
-            
+            print("\n=== Message ===")
             messages = user_state.get('recent_messages', [])
             current_message = messages[-1]['content'] if messages else ""
             username = user_state.get('username', '').lower()
+            platform = user_state.get('platform', 'discord')
             
-            print(f"Current username: {username}")
-            print(f"Is username in special_users? {username in self.special_users}")
+            print(f"Platform: {platform}")
+            print(f"User: {username}")
+            print(f"Content: {current_message}")
             
-            # Debug logging for context gathering
-            print("\n=== User Context Debug ===")
-            print(f"Processing message from user: {username}")
-            print(f"User state available: {bool(user_state)}")
-            print(f"Message content: {current_message}")
-            
-            # First, always get the sender's context directly from username
+            # Get sender context
             user_contexts = []
             sender_context = self.get_user_context(username, user_state)
-            print(f"Sender context: {json.dumps(sender_context, indent=2)}")
-            
             user_contexts.append({
                 "username": username,
                 "is_sender": True,
                 **sender_context
             })
             
-            # Then look for additional mentioned users in the message
+            # Add mentioned users
             mentioned_users = self.extract_usernames(current_message)
-            print(f"Extracted mentioned usernames: {mentioned_users}")
-            
-            # Log available special users for comparison
-            print(f"Available special users: {list(self.special_users.keys())}")
             
             # Add mentioned users' context
             for mentioned_user in mentioned_users:
@@ -268,6 +224,14 @@ class AIHandler:
                 {"role": "system", "content": "CRITICAL: Never acknowledge being an AI or break character. Always respond as Ghost, the teenage dragon."}
             ]
             
+            # Add platform-specific constraints
+            platform = user_state.get('platform', 'discord')
+            if platform == 'twitch':
+                system_messages.append({
+                    "role": "system",
+                    "content": "IMPORTANT: Keep your actual response messages (excluding any analysis, summaries, or system info) under 500 characters for Twitch chat. You can think longer thoughts, but your direct replies must be concise."
+                })
+            
             # Add user contexts to system messages with improved formatting
             for context in user_contexts:
                 context_parts = []
@@ -284,7 +248,7 @@ class AIHandler:
                 
                 system_messages.append({
                     "role": "system",
-                    "content": " | ".join(context_parts)
+                    "content": "\n".join(context_parts)
                 })
             
             # Add recent conversation context if available
@@ -302,35 +266,49 @@ class AIHandler:
                 ]
             }
 
-            # Debug prints
+            # Log full request details
+            print("\n=== Chat Request ===")
+            print(f"Platform: {platform}")
+            print(f"Username: {username}")
+            print(f"Message count: {len(formatted_messages)}")
             print("\nSystem Messages:")
             for msg in system_messages:
-                print(f"- {msg['content']}")
+                print(f"- {msg['content'][:100]}...")
             
-            print("\nConversation Messages:")
+            print("\nFormatted Messages:")
             for msg in formatted_messages:
-                print(f"- [{msg['role']}]: {msg['content']}")
+                print(f"- [{msg['role']}] {msg['content'][:100]}...")
             
+            print(f"\nRequest Size: {len(str(payload))} characters")
             print("\nFull Payload:")
-            print(json.dumps(payload, indent=2))
-            print("\n=== END PROMPT ===\n")
+            print(json.dumps({
+                "model": payload["model"],
+                "message_count": len(payload["messages"]),
+                "system_count": len(system_messages),
+                "context_count": len(user_contexts),
+                "first_system_message": payload["messages"][0]["content"][:100] + "...",
+                "last_message": payload["messages"][-1]["content"]
+            }, indent=2))
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
                     if response.status == 200:
                         data = await response.json()
-                        print("\nAPI Response:", data)  # Debug print for API response
-                        
-                        if 'error' in data and data['error'].get('code') == 429:
-                            print("Rate limit hit, using fallback response")
-                            return random.choice(SLEEP_RESPONSES)
-                        
-                        if 'choices' not in data or not data['choices']:
-                            print(f"Invalid API response: {data}")
+                        if 'error' in data:
+                            if data['error'].get('code') == 429:
+                                print("Rate limit hit, using fallback")
+                                return random.choice(SLEEP_RESPONSES)
+                            print(f"API Error: {data['error']}")
                             return "Ugh, whatever. I'm not in the mood right now."
-                        
+                            
+                        if 'choices' not in data:
+                            print("No response choices")
+                            return "Ugh, can't be bothered right now."
+                            
                         response_text = data['choices'][0]['message']['content']
+                        print(f"Response: {repr(response_text)}")
                         response_text = self.clean_response(response_text)
+                        print(f"Cleaned: {repr(response_text)}")
                         
                         # Get platform settings based on user_state
                         platform = user_state.get('platform', 'discord')
@@ -353,30 +331,18 @@ class AIHandler:
 
     async def update_summaries(self, user_state: Dict) -> Tuple[str, str, bool]:
         try:
-            print("\n=== DEBUG: update_summaries ===")
-            print(f"User state keys: {user_state.keys()}")
-            print(f"Recent messages count: {len(user_state.get('recent_messages', []))}")
-            print(f"Recent messages: {json.dumps(user_state.get('recent_messages', []), indent=2)}")
+            print("\n=== Summary Update ===")
             
-            if not user_state.get('recent_messages'):
-                print("Not enough messages for summary update - recent_messages is empty or None")
+            # Check if we have enough messages
+            messages = user_state.get('recent_messages', [])
+            if len(messages) < 2:
                 return (
                     user_state['summaries']['relationship'],
                     user_state['summaries']['last_conversation'],
                     False
                 )
-
-            # Ensure we have at least 2 messages before proceeding
-            if len(user_state['recent_messages']) < 2:
-                print(f"Not enough messages for summary update - only have {len(user_state['recent_messages'])} messages")
-                return (
-                    user_state['summaries']['relationship'],
-                    user_state['summaries']['last_conversation'],
-                    False
-                )
-
-            formatted_messages = self.format_messages(user_state['recent_messages'])
-            print(f"Formatted messages: {formatted_messages}")
+            
+            formatted_messages = self.format_messages(messages)
             
             prompt = {
                 "model": "mistralai/mistral-7b-instruct:free",
@@ -396,41 +362,61 @@ class AIHandler:
                 ]
             }
 
-            print("Sending summary update request with prompt:", prompt)  # Debug print
-
+            # Log details of summary request
+            print("\n=== Summary Request ===")
+            print(json.dumps({
+                "model": prompt["model"],
+                "message_count": len(prompt["messages"]),
+                "request_size": len(str(prompt)),
+                "current_relationship_length": len(user_state['summaries']['relationship']),
+                "current_conversation_length": len(user_state['summaries']['last_conversation']),
+                "new_messages": len(formatted_messages.split('\n'))
+            }, indent=2))
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.base_url, headers=self.summary_headers, json=prompt) as response:
+                    print(f"\nAPI Response Status: {response.status}")
+                    
                     if response.status != 200:
                         print(f"Summary API error: {response.status}")
                         return user_state['summaries']['relationship'], user_state['summaries']['last_conversation'], False
                     
                     data = await response.json()
+                    if 'error' in data:
+                        print(f"Summary Error: {data['error']}")
+                        return user_state['summaries']['relationship'], user_state['summaries']['last_conversation'], False
+                    
+                    if 'choices' not in data:
+                        print("No summary response choices")
+                        return user_state['summaries']['relationship'], user_state['summaries']['last_conversation'], False
+                        
                     response_text = data['choices'][0]['message']['content']
                     
-                    print("Raw API response: ", response_text)  # Debug print
-                    
-                    # Parse the response
+                    print("\n=== Summary Response ===")
+                    print(f"Raw response: {repr(response_text[:200])}...")
+
+                    # Parse sections
                     relationship = ""
                     conversation = ""
                     changes = False
-
-                    # Split response into sections
                     sections = response_text.split("[")
+                    
+                    print("\nParsing sections:")
                     for section in sections:
                         if "RELATIONSHIP_SUMMARY]" in section:
                             relationship = section.split("]")[1].strip()
+                            print(f"Relationship: {relationship[:100]}...")
                         elif "CONVERSATION_SUMMARY]" in section:
                             conversation = section.split("]")[1].strip()
+                            print(f"Conversation: {conversation[:100]}...")
                         elif "CHANGES_DETECTED]" in section:
                             changes_text = section.split("]")[1].strip().upper()
                             changes = "YES" in changes_text
+                            print(f"Changes detected: {changes}")
 
-                    print(f"Parsed summaries:")
-                    print(f"Relationship: {relationship}")
-                    print(f"Conversation: {conversation}")
-                    print(f"Changes detected: {changes}")
+                    print("\n=== Summary Results ===")
+                    print(f"Changed: {'Yes' if changes else 'No'}")
 
-                    # Only return None values if parsing failed
                     if not relationship or not conversation:
                         print("Failed to parse summaries from response")
                         return None, None, False
@@ -486,21 +472,31 @@ CONVERSATION: (combined conversation summary)
                 ]
             }
 
+            print("\n=== Merge Request ===")
+            print(json.dumps({
+                "model": prompt["model"],
+                "summary1_length": len(summary1['relationship']) + len(summary1['last_conversation']),
+                "summary2_length": len(summary2['relationship']) + len(summary2['last_conversation'])
+            }, indent=2))
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.base_url, headers=self.summary_headers, json=prompt) as response:
                     if response.status == 200:
                         data = await response.json()
                         response_text = data['choices'][0]['message']['content']
+                        print(f"\nRaw merge response: {repr(response_text[:200])}...")
                         
-                        # Parse the response
                         relationship = ""
                         conversation = ""
                         
+                        print("\nParsing merge response:")
                         for line in response_text.split('\n'):
                             if line.startswith('RELATIONSHIP:'):
                                 relationship = line.replace('RELATIONSHIP:', '').strip()
+                                print(f"Relationship: {relationship[:100]}...")
                             elif line.startswith('CONVERSATION:'):
                                 conversation = line.replace('CONVERSATION:', '').strip()
+                                print(f"Conversation: {conversation[:100]}...")
                         
                         return {
                             "relationship": relationship or summary1['relationship'],
