@@ -1,6 +1,6 @@
 {
     "swastik": {
-        "variants": ["swastikgoomber", "swasgoomber", "swastik"],
+        "variants": ["swastikgoomber", "swasgoomber", "swastik", "goomber"],
         "role": "vip",
         "context": "loves potatoes and willing participant in choccy milk heist"
     },
