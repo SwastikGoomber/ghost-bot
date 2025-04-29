@@ -259,7 +259,7 @@ class AIHandler:
                 })
             
             payload = {
-                "model": "sophosympatheia/rogue-rose-103b-v0.2:free",
+                "model": "qwen/qwen3-30b-a3b:free",
                 "messages": [
                     *system_messages,
                     *formatted_messages
@@ -345,7 +345,7 @@ class AIHandler:
             formatted_messages = self.format_messages(messages)
             
             prompt = {
-                "model": "mistralai/mistral-7b-instruct:free",
+                "model": "tngtech/deepseek-r1t-chimera:free",
                 "messages": [
                     {
                         "role": "system",
@@ -445,7 +445,7 @@ class AIHandler:
         """Merge two sets of summaries using AI to create a coherent combined summary"""
         try:
             prompt = {
-                "model": "mistralai/mistral-7b-instruct:free",
+                "model": "qwen/qwen3-30b-a3b:free",
                 "messages": [
                     {
                         "role": "system",

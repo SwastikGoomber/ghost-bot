@@ -1,4 +1,5 @@
 from twitchio.ext import commands
+import os
 import asyncio
 from typing import Optional
 from datetime import datetime, timedelta
@@ -37,17 +38,23 @@ class TwitchBot(commands.Bot):
 
     async def event_ready(self):
         """Called once when the bot goes online."""
-        print(f"\n=== Twitch Bot Authorization Info ===")
+        print("\n=== Twitch Bot Authorization Info ===")
         print(f"Bot Username: {self.nick}")
         print(f"Channel: {TWITCH_CHANNEL_NAME}")
         
-        # Verify we can send messages
         try:
+            # Initialize state manager if using MongoDB
+            if os.environ.get('MONGODB_URI') and not self.state_manager._initialized:
+                await self.state_manager.load_states()
+                self.state_manager._initialized = True
+            
+            # Send test message
             channel = self.get_channel(TWITCH_CHANNEL_NAME)
             await channel.send("Bot connected and testing permissions...")
             print("✓ Successfully sent test message")
         except Exception as e:
-            print(f"❌ Failed to send test message: {e}")
+            print(f"❌ Failed during initialization: {e}")
+            traceback.print_exc()
 
     async def handle_command(self, message, cmd):
         """Handle commands separately from chat messages"""
@@ -82,11 +89,6 @@ class TwitchBot(commands.Bot):
         """Called when a message is received in the channel."""
         if message.echo:
             return
-
-        print(f"\n=== Received Twitch message ===")
-        print(f"Content: {message.content}")
-        print(f"Author: {message.author.name}")
-        print(f"Channel: {message.channel.name}")
 
         try:
             # Handle commands first (both ! and / prefixes)
@@ -126,16 +128,9 @@ class TwitchBot(commands.Bot):
 
             # Check if we need to update summaries
             if user_state.needs_summary_update():
-                print(f"\n=== Updating Summaries ===")
-                print(f"Message count triggered update: {user_state.message_count}")
                 success, msg = await self.state_manager.update_user_state(platform_key)
-                if success:
-                    print("Summaries updated successfully")
-                else:
+                if not success:
                     print(f"Summary update failed: {msg}")
-
-            # Save states after every interaction
-            self.state_manager.save_states()
 
             # Send response
             await message.channel.send(f"@{message.author.name} {response}")

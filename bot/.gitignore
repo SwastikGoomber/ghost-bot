@@ -29,9 +29,16 @@ var/
 
 # User states and runtime data
 user_states.json
+user_states.json.bak
+states_backup.json
 message_history.json
 state_backups/
 logs/
+
+# Generated files
+test_*.py
+*_test.py
+*.bak
 
 # IDE
 .vscode/

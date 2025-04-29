@@ -164,12 +164,38 @@ class StateManager:
         self.users = {}
         self.pending_links = {}
         self.ai_handler = ai_handler
-        self.global_messages = []  # Initialize global messages list
-        self.user_messages = {}    # Initialize user messages dictionary
-        self.load_states()
+        self._initialized = False  # Track initialization state
+        self.db = None
+        
+        # Determine storage mode
+        if os.environ.get('MONGODB_URI'):
+            from db import MongoDB
+            self.db = MongoDB()
+            
+        # Do not auto-load states here - wait for explicit load_states call
 
-    def save_states(self):
-        """Save all states to file"""
+    async def initialize(self):
+        """Initialize database connection if needed"""
+        if self.db is not None:
+            try:
+                print("Connecting to MongoDB...")
+                await self.db.connect()
+                is_connected = await self.db.ping()
+                if is_connected:
+                    print("✓ Connected to MongoDB")
+                else:
+                    print("❌ MongoDB ping failed")
+            except Exception as e:
+                print(f"❌ MongoDB connection failed: {e}")
+                self.db = None
+
+    def __del__(self):
+        """Cleanup database connection"""
+        if self.db:
+            self.db.close()
+
+    async def save_states(self):
+        """Save all states"""
         try:
             data = {}
             processed_users = set()  # Track users we've saved
@@ -191,29 +217,43 @@ class StateManager:
             # Add pending links if any exist
             if self.pending_links:
                 data['pending_links'] = self.pending_links
+                
+            # Convert datetime objects to ISO format strings
+            data = json.loads(json.dumps(data, default=str))
             
-            # Save to file
-            with open(self.USER_STATES_FILE, 'w') as f:
-                json.dump(data, f, indent=2, default=str)
+            # Save to storage
+            if self.db is not None:
+                await self.db.save_states(data)
+            else:
+                with open(self.USER_STATES_FILE, 'w') as f:
+                    json.dump(data, f, indent=2)
                 
         except Exception as e:
             logging.error(f"Failed to save states: {e}")
             traceback.print_exc()
 
-    def load_states(self):
-        """Load states from file"""
+    async def load_states(self):
+        """Load states from storage"""
         print("\n=== Loading states ===")
         self.users = {}
         self.pending_links = {}
-        
-        if not os.path.exists(self.USER_STATES_FILE):
-            print(f"No state file found at {self.USER_STATES_FILE}")
-            return
 
+        # Initialize MongoDB connection if needed
+        if self.db is not None:
+            await self.initialize()
         try:
-            print(f"Loading from {self.USER_STATES_FILE}")
-            with open(self.USER_STATES_FILE, 'r') as f:
-                data = json.load(f)
+            # Load from MongoDB if available, otherwise from file
+            if self.db:
+                print("Loading from MongoDB")
+                data = await self.db.load_states()
+            else:
+                if not os.path.exists(self.USER_STATES_FILE):
+                    print(f"No state file found at {self.USER_STATES_FILE}")
+                    return
+                    
+                print(f"Loading from {self.USER_STATES_FILE}")
+                with open(self.USER_STATES_FILE, 'r') as f:
+                    data = json.load(f)
             
             # Load pending links if any
             self.pending_links = data.get('pending_links', {})
@@ -285,7 +325,7 @@ class StateManager:
             self.users = {}
             self.pending_links = {}
 
-    def unlink_accounts(self, platform_key: str) -> bool:
+    async def unlink_accounts(self, platform_key: str) -> bool:
         """Unlink a user's Discord and Twitch accounts"""
         try:
             user_state = self.users.get(platform_key)
@@ -321,17 +361,17 @@ class StateManager:
             self.users[discord_key] = user_state
             self.users[twitch_key] = twitch_state
 
-            self.save_states()
+            await self.save_states()
             return True
         except Exception as e:
             logging.error(f"Failed to unlink accounts: {e}")
             return False
 
-    def create_link_request(self, discord_id: str, twitch_username: str) -> bool:
+    async def create_link_request(self, discord_id: str, twitch_username: str) -> bool:
         """Create a pending link request"""
         try:
             self.pending_links[twitch_username.lower()] = discord_id
-            self.save_states()  # Save immediately after creating request
+            await self.save_states()  # Save immediately after creating request
             logging.info(f"Created link request: Discord {discord_id} -> Twitch {twitch_username}")
             return True
         except Exception as e:
@@ -372,7 +412,7 @@ class StateManager:
             
             # Clean up pending link
             del self.pending_links[twitch_username]
-            self.save_states()
+            await self.save_states()
             
             return True, "Accounts successfully linked! Conversation history and summaries have been merged."
             
@@ -381,7 +421,7 @@ class StateManager:
             return False, f"Error linking accounts: {str(e)}"
 
     async def add_message(self, platform_key: str, content: str, from_bot: bool, username: str):
-        """Add a message to both global and user-specific history"""
+        """Add a message to user state"""
         message = {
             "content": content,
             "from_bot": from_bot,
@@ -389,17 +429,7 @@ class StateManager:
             "timestamp": datetime.now().isoformat()
         }
 
-        # Add to global messages (keep last 10)
-        self.global_messages.append(message)
-        if len(self.global_messages) > 10:
-            self.global_messages = self.global_messages[-10:]
-
-        # Add to user-specific messages
-        if platform_key not in self.user_messages:
-            self.user_messages[platform_key] = []
-        self.user_messages[platform_key].append(message)
-
-        # Update user state message count and recent messages
+        # Update user state
         if platform_key in self.users:
             user_state = self.users[platform_key]
             user_state.recent_messages.append(message)
@@ -407,21 +437,8 @@ class StateManager:
             user_state.last_interaction = datetime.now()
             print(f"Added message to {platform_key}. Messages: {len(user_state.recent_messages)}, Count: {user_state.message_count}")
             
-            # Save state after each message
-            self.save_states()
-
-    def get_user_messages(self, platform_key: str) -> list:
-        """Get messages for specific user"""
-        return self.user_messages.get(platform_key, [])
-
-    def clear_user_messages(self, platform_key: str):
-        """Clear messages for a user after state update"""
-        if platform_key in self.user_messages:
-            self.user_messages[platform_key] = []
-
-    def get_global_messages(self) -> list:
-        """Get last 10 global messages"""
-        return self.global_messages
+            # Save state
+            await self.save_states()
 
     async def update_user_state(self, platform_key: str) -> Tuple[bool, str]:
         """Update user state summaries"""
@@ -455,7 +472,7 @@ class StateManager:
                     user_state.message_count = 0  # Reset count since last summary
                     
                     # Save immediately after updating
-                    self.save_states()
+                    await self.save_states()
                     print(f"Successfully saved updated state for {platform_key}")
                     return True, "Summary updated successfully!"
                 
