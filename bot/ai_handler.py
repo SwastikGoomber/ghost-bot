@@ -271,7 +271,7 @@ class AIHandler:
                 })
             
             payload = {
-                "model": "qwen/qwen3-30b-a3b:free",
+                "model": "arliai/qwq-32b-arliai-rpr-v1:free",
                 "messages": [
                     *system_messages,
                     *formatted_messages

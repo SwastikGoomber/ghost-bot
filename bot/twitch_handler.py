@@ -50,7 +50,7 @@ class TwitchBot(commands.Bot):
             
             # Send test message
             channel = self.get_channel(TWITCH_CHANNEL_NAME)
-            await channel.send("Bot connected and testing permissions...")
+            await channel.send("/me Make way lil humans, for Gh0st is here!")
             print("✓ Successfully sent test message")
         except Exception as e:
             print(f"❌ Failed during initialization: {e}")
