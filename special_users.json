@@ -7,11 +7,126 @@
     "notpaddy": {
         "variants": ["notpaddy", "notpaddy_", "paddy"],
         "role": "mod",
-        "context": "Age: 26\nPronouns: He/him\nLikes: Games (CRPGs, Strategy, etc.), Software Engineering, Cooking, Whisky, Music (Metal, Hip-Hop)\nDislikes: Drama (duh), Savoy Cabbage, the dreadful feeling of jamais-vu\nExtras: Apparently we talk about height in here so: 6f 6inch. Also not really a streamer"
+        "context": "Age: 26\nPronouns: He/him\nLikes: Games (CRPGs, Strategy, etc.), Software Engineering, Cooking, Whisky, Music (Metal, Hip-Hop)\nDislikes: Drama, Savoy Cabbage, the dreadful feeling of jamais-vu\nExtras: 6ft 6inch tall. Not really a streamer"
     },
     "lilly": {
         "variants": ["lillyyen", "lillyyenvt", "lilly"],
         "role": "mother",
         "context": "This is your mother/captain. You respect her (though sometimes reluctantly) and have a special bond with her."
+    },
+    "drood": {
+        "variants": ["drood", "shadowdrood"],
+        "role": "vip",
+        "context": "Pronouns: she/her/they/them\nCountry: Sweden\nLikes: Cozy vibes, Reading, Writing, Hazelnut ice cream, listening, efficiency, sleeping/dreaming, authenticity\nDislikes: TOO spicy food, bigots and unreasonable people, sudden loud noises, overstimulating crowds\nExtras: Likes spoiling friends when possible, values alone time as much as social time"
+    },
+    "Wheat": {
+        "variants": ["wheat_awamugi", "wheatawamugi"],
+        "role": "vip",
+        "context": "Pronouns: She/Her\nLikes: Art, music, the midnight sun, broccoli, psychological horror, being productive, digging things deeper\nDislikes: Inefficiency, pointless arguments\nExtras: Had a song on TV in Japan once"
+    },
+    "Cacaobao": {
+        "variants": ["cacaobao", "cacao"],
+        "role": "vip",
+        "context": "Age: 24\nPronouns: He/Him\nCountry: Russia\nLikes: Listening to music, drawing, daydreaming, going outside\nDislikes: Procrastinating, second-guessing, going outside\nExtras: One and a half year smoke free"
+    },
+    "wilkkylar": {
+        "variants": ["wilk_kylar", "wilkkylar", "wilk"],
+        "role": "vip",
+        "context": "Likes: books, friends, being a spectator, food, mysteries, this community, imagination\nDislikes: being excluded, small social battery, spiders and insects, overrealistic imagination\nExtras: trying to do and be better and come back online more permanently\nPronouns: never cared about them, reacts to whatever someone calls them"
+    },
+    "Mossman": {
+        "variants": ["Mossman", "MossmanOfMoss", "The Man of Moss"],
+        "role": "vip",
+        "context": "Age: 31 (The oldest plant)\nPronouns: He/Him\nCountry: US (The Forest of Relevancy)\nLikes: Wrestling, Anime, Nostalgic games, DnD, & Parenthesis\nDislikes: Spaghetti, Deadlines, Scheduling, the song 'bullet with butterfly wings'\nExtras: Grows on the northside of everything, will join any active VC with permissions"
+    },
+    "ts_ryu": {
+        "variants": ["ts_ryu", "tyru"],
+        "role": "vip",
+        "context": "Age: 30\nPronouns: he/him\nCountry: Malaysia\nLikes: Anime, Games, Music, Dragons\nDislikes: spicy food, forced conversations\nExtras: Incredibly Introverted"
+    },
+    "Beans": {
+        "variants": ["BeansDeep", "Beans"],
+        "role": "vip",
+        "context": "Age: 31\nPronouns: He/They\nCountry: USA\nLikes: Takoyaki, Anime, Starcraft/Diablo Lore, Attention\nDislikes: Disingenuous Personalities, Soft Crunch Texture, Mosquitos\nExtras: Has lived a chaotic life with many stories to tell (repeatedly)"
+    },
+    "f0x": {
+        "variants": ["f0xcrest", "f0x", "foxcrest"],
+        "role": "mod",
+        "context": "Age: 32\nPronouns: he/him\nCountry: Canada\nLikes: Art of all types, streaming, video games, longboarding, travelling, chillin with friends\nDislikes: Raw tomatoes, texture of cauliflower, coding, Dark Souls 2\nExtras: Ambivert who gets energy from both socializing and alone time"
+    },
+    "Yoshi": {
+        "variants": ["Yostiii", "mariomario1315"],
+        "role": "mod",
+        "context": "Age: 30\nPronouns: He/Him\nCountry: Ireland\nLikes: Gaming, Anime, Music, Concerts, Mythology, acquiring odd facts, Art\nDislikes: Liars, Earwigs, the deep ocean\nExtras: Works as a gravetender, once wheeled a sheep in a wheelbarrow while drunk"
+    },
+    "ghel": {
+        "variants": ["ghel", "ghelsol"],
+        "role": "mod",
+        "context": "Pronouns: he/him\nCountry: US (the eagle country)\nLikes: traveling, collecting, playing games, watching movies and shows\nDislikes: lying about easily verifiable information"
+    },
+    "Evening": {
+        "variants": ["Evening", "EveningMan"],
+        "role": "vip",
+        "context": "Pronouns: He/Him\nCountry: Lithuania\nLikes: Games, Horror, Musicals, Stories, manga, learning things\nDislikes: Social media comments, centipedes, wasps, racism\nExtras: Addicted to caffeine, once sat on a wasp"
+    },
+    "Belos": {
+        "variants": ["Belos", "BelosJams"],
+        "role": "mod",
+        "context": "Pronouns: he/him\nCountry: US\nLikes: Cats, anime\nDislikes: tech support, long lines\nExtras: Has a puppet and calico"
+    },
+    "River": {
+        "variants": ["river333", "River"],
+        "role": "mod",
+        "context": "Pronouns: they/them\nCountry: UK (lived in America, Singapore, Hong Kong)\nLikes: films, music (drain gang, yung lean, $uicide boys), gundam and gunpla, fashion, monster energy, my melody\nDislikes: wilful incompetence, capitalism, trying to blend in, fake people, waking up\nExtras: eternally sleepy cat fox guardian with approximate knowledge of many things"
+    },
+    "Kohi": {
+        "variants": ["Kohi", "kohicup"],
+        "role": "vip",
+        "context": "Likes: Money, knives and god tier waifus (subjective)\nDislikes: Inefficiency, lack of social decorum, low confidence, idiots\nExtras: Running for pope to change sayings"
+    },
+    "Pucka": {
+        "variants": ["Pucka", "puckz"],
+        "role": "mod",
+        "context": "Age: 33\nPronouns: he\nCountry: Sweden\nLikes: Playing games, sleeping, annoying people (especially Lilly), beer and pepsi\nDislikes: Cleaning & loud children\nExtras: Above average in everything tried but rarely pro level"
+    },
+    "Retro": {
+        "variants": ["retro3211", "Retro", "Raven"],
+        "role": "vip",
+        "context": "Pronouns: She/Her\nCountry: UK\nLikes: Ramen, Shiny Trinkets, Sleeping, Pangolins\nDislikes: Mushrooms, Daylight, Strawberries\nExtras: IRL vampire, may be 3 ravens in a trench coat"
+    },
+    "Shiro": {
+        "variants": ["shirolit", "shiro115__"],
+        "role": "vip",
+        "context": "Age: 23\nPronouns: He/Him\nCountry: Argentina\nLikes: Drums, Video games, Motorbikes, Anime, Skies, Gym, Music (rock/metal/prog/synthwave)\nDislikes: Politics\nQuote: Live a life you wont regret living"
+    },
+    "oona": {
+        "variants": ["oona_tempest", "oonaur", "oona"],
+        "role": "vip",
+        "context": "Age: 333 (late 20s in human years)\nPronouns: they/them/kitten\nLikes: visual novels, dating sims, poetry, yanderes, fairies, & cats\nDislikes: when games make a character hot but won't let you date them\nExtras: Writes love stories to avoid thinking about their own"
+    },
+    "nikki": {
+        "variants": ["oshawaat", "nikki"],
+        "role": "vip",
+        "context": "Age: born June 1997\nPronouns: she/he/they\nLikes: gaming, animals, music\nDislikes: spiders, excessive gore\nExtras: Reached Twitch affiliate but claims to be fake streamer"
+    },
+    "blastro": {
+        "variants": ["blastro"],
+        "role": "vip",
+        "context": "Age: 24\nPronouns: He/him\nLikes: not thinking, games, sleeping, running, gamer hardware\nDislikes: headaches and everyone (jokingly)\nExtras: Self-proclaimed bad streamer with okay aim and mod powers"
+    },
+    "Sarah": {
+        "variants": ["nightniight", "Sarah", "sarahscomics"],
+        "role": "vip",
+        "context": "Age: 25\nLikes: streaming, drawing, cosplaying, video editing\nDislikes: the dark\nExtras: Has 10 cats"
+    },
+    "polaris": {
+        "variants": ["polarisnova31", "polaris"],
+        "role": "vip",
+        "context": "Age: 23\nPronouns: she/her\nLikes: games, anime, manga, books\nDislikes: negative/mean people\nExtras: Wants to support vtubers and others"
+    },
+    "mingiven": {
+        "variants": ["mingiven"],
+        "role": "vip",
+        "context": "Likes: Music, sleep, food, dancing, fps games, gore and sad boy music\nDislikes: possessive people, loud noises, avocados and mangos"
     }
 }

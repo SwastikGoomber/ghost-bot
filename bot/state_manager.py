@@ -116,27 +116,33 @@ class UserState:
 
     def needs_summary_update(self) -> bool:
         """Check if we need to update summaries based on message count and time"""
+        # Always return False for bot messages to avoid recursive updates
+        if self.recent_messages and self.recent_messages[-1]['from_bot']:
+            return False
+
         # Count messages since last summary update
         last_update = datetime.fromisoformat(self.summaries.get('last_updated', '2000-01-01T00:00:00'))
         messages_since_update = 0
         
         for msg in self.recent_messages:
-            msg_time = datetime.fromisoformat(msg['timestamp'])
-            if msg_time > last_update:
-                messages_since_update += 1
+            # Only count user messages, not bot responses
+            if not msg['from_bot']:
+                msg_time = datetime.fromisoformat(msg['timestamp'])
+                if msg_time > last_update:
+                    messages_since_update += 1
         
-        # Update if we have 6 or more messages since last summary
+        # Update if we have 6 or more user messages since last summary
         if messages_since_update >= 6:
-            print(f"Summary update needed: {messages_since_update} messages since last update")
+            print(f"Summary update needed: {messages_since_update} user messages since last update")
             return True
         
-        # Update if it's been more than 30 minutes since last summary
+        # Update if it's been more than 30 minutes since last summary and we have new messages
         time_diff = datetime.now() - last_update
-        if time_diff.total_seconds() > 1800:  # 30 minutes
+        if time_diff.total_seconds() > 1800 and messages_since_update > 0:  # 30 minutes
             print("Summary update needed: Over 30 minutes since last update")
             return True
             
-        print(f"No summary update needed: {messages_since_update} messages since last update")
+        print(f"No summary update needed: {messages_since_update} user messages since last update")
         return False
 
     def to_dict(self) -> dict:

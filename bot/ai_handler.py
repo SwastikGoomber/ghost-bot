@@ -235,14 +235,26 @@ class AIHandler:
             # Add user contexts to system messages with improved formatting
             for context in user_contexts:
                 context_parts = []
-                context_parts.append(f"IMPORTANT USER CONTEXT - {context['username']}")
+                username = context['username']
+                
+                # Start with user identification
                 if context['is_sender']:
-                    context_parts.append("(Current Speaker)")
+                    context_parts.append(f"IMPORTANT USER CONTEXT - Current Speaker: {username}")
+                else:
+                    context_parts.append(f"IMPORTANT USER CONTEXT - Mentioned User: {username}")
                 
+                # Add special user info if available
                 if context['special_info']:
-                    context_parts.append(f"CORE RELATIONSHIP: {context['special_info']['role']}")
-                    context_parts.append(f"CONTEXT: {context['special_info']['context']}")
+                    # Get full user data to include variants
+                    user_data = self.special_users.get(self.variant_lookup.get(username, username))
+                    if user_data:
+                        context_parts.append(f"ROLE: {context['special_info']['role']}")
+                        context_parts.append(f"CONTEXT: {context['special_info']['context']}")
+                        variants = [v for v in user_data['variants'] if v.lower() != username.lower()]
+                        if variants:
+                            context_parts.append(f"ALSO KNOWN AS: {', '.join(variants)}")
                 
+                # Add relationship history
                 if context['relationship']:
                     context_parts.append(f"RECENT DYNAMIC: {context['relationship']}")
                 

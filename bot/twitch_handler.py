@@ -98,6 +98,12 @@ class TwitchBot(commands.Bot):
                 if await self.handle_command(message, cmd):
                     return
 
+            # Check if bot should respond
+            name_mentions = ['ghost', 'ghosty']
+            message_lower = message.content.lower()
+            contains_name = any(name in message_lower for name in name_mentions)
+            mentioned = f"@{TWITCH_BOT_NAME}".lower() in message_lower
+
             platform_key = f"twitch_{message.author.id}"
             
             # Get user state with potential link notification
@@ -115,25 +121,27 @@ class TwitchBot(commands.Bot):
                 message.author.name
             )
 
-            # Get AI response
-            response = await self.ai_handler.get_chat_response(user_state.to_dict())
+            # Only respond if mentioned or contains trigger words
+            if contains_name or mentioned:
+                # Get AI response
+                response = await self.ai_handler.get_chat_response(user_state.to_dict())
+                
+                # Store bot's response
+                await self.state_manager.add_message(
+                    platform_key,
+                    response,
+                    True,
+                    BOT_NAME
+                )
 
-            # Store bot's response
-            await self.state_manager.add_message(
-                platform_key,
-                response,
-                True,
-                BOT_NAME
-            )
+                # Send response
+                await message.channel.send(f"@{message.author.name} {response}")
 
-            # Check if we need to update summaries
+            # Check if we need to update summaries (regardless of bot response)
             if user_state.needs_summary_update():
                 success, msg = await self.state_manager.update_user_state(platform_key)
                 if not success:
                     print(f"Summary update failed: {msg}")
-
-            # Send response
-            await message.channel.send(f"@{message.author.name} {response}")
 
         except Exception as e:
             print(f"Error in event_message: {e}")
