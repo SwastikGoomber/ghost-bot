@@ -115,34 +115,19 @@ class UserState:
         # The actual summary update will be triggered from bot.py after checking needs_summary_update()
 
     def needs_summary_update(self) -> bool:
-        """Check if we need to update summaries based on message count and time"""
+        """Check if we need to update summaries based on total message count"""
         # Always return False for bot messages to avoid recursive updates
         if self.recent_messages and self.recent_messages[-1]['from_bot']:
             return False
 
-        # Count messages since last summary update
-        last_update = datetime.fromisoformat(self.summaries.get('last_updated', '2000-01-01T00:00:00'))
-        messages_since_update = 0
-        
-        for msg in self.recent_messages:
-            # Only count user messages, not bot responses
-            if not msg['from_bot']:
-                msg_time = datetime.fromisoformat(msg['timestamp'])
-                if msg_time > last_update:
-                    messages_since_update += 1
-        
-        # Update if we have 6 or more user messages since last summary
-        if messages_since_update >= 6:
-            print(f"Summary update needed: {messages_since_update} user messages since last update")
+        # After 6 messages (3 user messages + 3 bot responses), update summary
+        if self.message_count >= 10:
+            print(f"Summary update needed: {self.message_count} total messages")
+            # Reset counter for next summary
+            self.message_count = 0
             return True
         
-        # Update if it's been more than 30 minutes since last summary and we have new messages
-        time_diff = datetime.now() - last_update
-        if time_diff.total_seconds() > 1800 and messages_since_update > 0:  # 30 minutes
-            print("Summary update needed: Over 30 minutes since last update")
-            return True
-            
-        print(f"No summary update needed: {messages_since_update} user messages since last update")
+        print(f"No summary update needed: {self.message_count} total messages")
         return False
 
     def to_dict(self) -> dict:
@@ -440,6 +425,12 @@ class StateManager:
             user_state = self.users[platform_key]
             user_state.recent_messages.append(message)
             user_state.message_count += 1
+            
+            # Trigger summary and reset counter every 10 messages
+            if user_state.message_count >= 10:
+                await self.update_user_state(platform_key)
+                user_state.message_count = 0
+            
             user_state.last_interaction = datetime.now()
             print(f"Added message to {platform_key}. Messages: {len(user_state.recent_messages)}, Count: {user_state.message_count}")
             
@@ -478,10 +469,8 @@ class StateManager:
                     user_state.summaries["last_conversation"] = conversation
                     user_state.summaries["last_updated"] = now.isoformat()
                     
-                    # Then update message history while keeping message count
-                    recent_count = len(user_state.recent_messages[-3:])  # Count of messages we're keeping
+                    # Keep only last 3 messages but maintain message count
                     user_state.recent_messages = user_state.recent_messages[-3:]  # Keep last 3 messages
-                    user_state.message_count = max(0, user_state.message_count - (len(user_state.recent_messages) - recent_count))
                     
                     # Finally save the state
                     await self.save_states()
