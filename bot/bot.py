@@ -198,29 +198,34 @@ class CustomBot(commands.Bot):
                         message.author.nick
                     )
 
-                    # Only store messages that trigger a response
-                    await self.state_manager.add_message(
-                        platform_key,
-                        message.content,
-                        False,
-                        message.author.name
-                    )
-
+                    # Get response first to check for rate limits
                     response = await self.ai_handler.get_chat_response(user_state.to_dict())
+                    
+                    # Only store messages if we got a real response (not a rate limit message)
+                    if response not in SLEEP_RESPONSES:
+                        # Store the conversation pair
+                        await self.state_manager.add_message(
+                            platform_key,
+                            message.content,
+                            False,
+                            message.author.name
+                        )
+                        
+                        await self.state_manager.add_message(
+                            platform_key,
+                            response,
+                            True,
+                            BOT_NAME
+                        )
 
-                    await self.state_manager.add_message(
-                        platform_key,
-                        response,
-                        True,
-                        BOT_NAME
-                    )
+                        # Only check for summary updates on real conversations
+                        if user_state.needs_summary_update():
+                            success, msg = await self.state_manager.update_user_state(platform_key)
+                            if not success:
+                                print(f"Summary update failed: {msg}")
 
-                    if user_state.needs_summary_update():
-                        success, msg = await self.state_manager.update_user_state(platform_key)
-                        if not success:
-                            print(f"Summary update failed: {msg}")
+                        await self.state_manager.save_states()
 
-                    await self.state_manager.save_states()
                     await message.reply(response)
                 except Exception as e:
                     print(f"Error processing message: {e}")
@@ -236,4 +241,3 @@ def run_bot():
 
 if __name__ == "__main__":
     run_bot()
-

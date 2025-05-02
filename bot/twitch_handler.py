@@ -20,7 +20,8 @@ from config import (
     RATE_LIMIT_PERIOD,
     BOT_NAME,
     PLATFORM_SETTINGS,
-    BOT_PERSONA
+    BOT_PERSONA,
+    SLEEP_RESPONSES
 )
 
 class TwitchBot(commands.Bot):
@@ -115,31 +116,34 @@ class TwitchBot(commands.Bot):
                     "twitch"
                 )
 
-                # First store the user's message since it triggered a response
-                await self.state_manager.add_message(
-                    platform_key,
-                    message.content,
-                    False,
-                    message.author.name
-                )
-
-                # Get and store AI response
+                # Get response first to check for rate limits
                 response = await self.ai_handler.get_chat_response(user_state.to_dict())
-                await self.state_manager.add_message(
-                    platform_key,
-                    response,
-                    True,
-                    BOT_NAME
-                )
+                
+                # Only store messages if we got a real response (not a rate limit message)
+                if response not in SLEEP_RESPONSES:
+                    # Store the conversation pair
+                    await self.state_manager.add_message(
+                        platform_key,
+                        message.content,
+                        False,
+                        message.author.name
+                    )
+                    
+                    await self.state_manager.add_message(
+                        platform_key,
+                        response,
+                        True,
+                        BOT_NAME
+                    )
 
-                # Send response
+                    # Check summaries only after actual interactions
+                    if user_state.needs_summary_update():
+                        success, msg = await self.state_manager.update_user_state(platform_key)
+                        if not success:
+                            print(f"Summary update failed: {msg}")
+
+                # Always send response
                 await message.channel.send(f"@{message.author.name} {response}")
-
-                # Check if we need to update summaries only after actual interactions
-                if user_state.needs_summary_update():
-                    success, msg = await self.state_manager.update_user_state(platform_key)
-                    if not success:
-                        print(f"Summary update failed: {msg}")
 
         except Exception as e:
             print(f"Error in event_message: {e}")
