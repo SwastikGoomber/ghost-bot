@@ -104,29 +104,27 @@ class TwitchBot(commands.Bot):
             contains_name = any(name in message_lower for name in name_mentions)
             mentioned = f"@{TWITCH_BOT_NAME}".lower() in message_lower
 
-            platform_key = f"twitch_{message.author.id}"
-            
-            # Get user state with potential link notification
-            user_state, link_notification = await self.state_manager.get_user_state(
-                str(message.author.id),
-                message.author.name,
-                "twitch"
-            )
-
-            # Store user's message
-            await self.state_manager.add_message(
-                platform_key,
-                message.content,
-                False,
-                message.author.name
-            )
-
-            # Only respond if mentioned or contains trigger words
+            # Only process messages if bot should respond
             if contains_name or mentioned:
-                # Get AI response
-                response = await self.ai_handler.get_chat_response(user_state.to_dict())
+                platform_key = f"twitch_{message.author.id}"
                 
-                # Store bot's response
+                # Get user state with potential link notification
+                user_state, link_notification = await self.state_manager.get_user_state(
+                    str(message.author.id),
+                    message.author.name,
+                    "twitch"
+                )
+
+                # First store the user's message since it triggered a response
+                await self.state_manager.add_message(
+                    platform_key,
+                    message.content,
+                    False,
+                    message.author.name
+                )
+
+                # Get and store AI response
+                response = await self.ai_handler.get_chat_response(user_state.to_dict())
                 await self.state_manager.add_message(
                     platform_key,
                     response,
@@ -137,11 +135,11 @@ class TwitchBot(commands.Bot):
                 # Send response
                 await message.channel.send(f"@{message.author.name} {response}")
 
-            # Check if we need to update summaries (regardless of bot response)
-            if user_state.needs_summary_update():
-                success, msg = await self.state_manager.update_user_state(platform_key)
-                if not success:
-                    print(f"Summary update failed: {msg}")
+                # Check if we need to update summaries only after actual interactions
+                if user_state.needs_summary_update():
+                    success, msg = await self.state_manager.update_user_state(platform_key)
+                    if not success:
+                        print(f"Summary update failed: {msg}")
 
         except Exception as e:
             print(f"Error in event_message: {e}")

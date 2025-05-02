@@ -198,6 +198,7 @@ class CustomBot(commands.Bot):
                         message.author.nick
                     )
 
+                    # Only store messages that trigger a response
                     await self.state_manager.add_message(
                         platform_key,
                         message.content,
@@ -221,14 +222,12 @@ class CustomBot(commands.Bot):
 
                     await self.state_manager.save_states()
                     await message.reply(response)
-                    
                 except Exception as e:
-                    print(f"Error in message handler: {e}")
+                    print(f"Error processing message: {e}")
                     traceback.print_exc()
-                    await message.reply("Sorry, I'm having trouble processing that right now.")
-                    
+            # No else clause to store messages that don't trigger a response
         except Exception as e:
-            print(f"Critical error in on_message: {e}")
+            print(f"Error in on_message: {e}")
             traceback.print_exc()
 
 def run_bot():
@@ -237,3 +236,4 @@ def run_bot():
 
 if __name__ == "__main__":
     run_bot()
+

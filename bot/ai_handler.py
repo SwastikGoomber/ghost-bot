@@ -271,7 +271,7 @@ class AIHandler:
                 })
             
             payload = {
-                "model": "arliai/qwq-32b-arliai-rpr-v1:free",
+                "model": "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
                 "messages": [
                     *system_messages,
                     *formatted_messages
@@ -314,10 +314,14 @@ class AIHandler:
                             print("No response choices")
                             return "Ugh, can't be bothered right now."
                             
+                        print("\n=== API Response ===")
+                        print(json.dumps(data, indent=2))
+                        
                         response_text = data['choices'][0]['message']['content']
-                        print(f"Response: {repr(response_text)}")
+                        print(f"\nRaw Response: {repr(response_text)}")
+                        
                         response_text = self.clean_response(response_text)
-                        print(f"Cleaned: {repr(response_text)}")
+                        print(f"\nCleaned Response: {repr(response_text)}")
                         
                         # Get platform settings based on user_state
                         platform = user_state.get('platform', 'discord')
@@ -391,12 +395,15 @@ class AIHandler:
                         return user_state['summaries']['relationship'], user_state['summaries']['last_conversation'], False
                     
                     data = await response.json()
+                    print("\n=== Summary API Response ===")
+                    print(json.dumps(data, indent=2))
+                    
                     if 'error' in data:
-                        print(f"Summary Error: {data['error']}")
+                        print(f"\nSummary Error: {data['error']}")
                         return user_state['summaries']['relationship'], user_state['summaries']['last_conversation'], False
                     
                     if 'choices' not in data:
-                        print("No summary response choices")
+                        print("\nNo summary response choices")
                         return user_state['summaries']['relationship'], user_state['summaries']['last_conversation'], False
                         
                     response_text = data['choices'][0]['message']['content']
@@ -490,10 +497,15 @@ CONVERSATION: (combined conversation summary)
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.base_url, headers=self.summary_headers, json=prompt) as response:
+                    print(f"\nAPI Response Status: {response.status}")
+                    
                     if response.status == 200:
                         data = await response.json()
+                        print("\n=== Merge API Response ===")
+                        print(json.dumps(data, indent=2))
+                        
                         response_text = data['choices'][0]['message']['content']
-                        print(f"\nRaw merge response: {repr(response_text[:200])}...")
+                        print(f"\nRaw merge response: {repr(response_text)}")
                         
                         relationship = ""
                         conversation = ""

@@ -34,8 +34,8 @@ class UserState:
         self.primary_name = username
         self.name_variants = self._generate_variants(username)
         self.summaries = {
-            "relationship": "New user, relationship not established yet.",
-            "last_conversation": "First interaction.",
+            "relationship": "No additional information yet.",
+            "last_conversation": "No conversation summary yet",
             "last_updated": datetime.now().isoformat()
         }
         self.recent_messages = []
@@ -108,11 +108,9 @@ class UserState:
             "timestamp": datetime.now().isoformat()
         }
         self.recent_messages.append(message)
-        # Only increment count for user messages
-        if not from_bot:
-            self.message_count += 1
+        self.message_count += 1
         self.last_interaction = datetime.now()
-        print(f"Added message to {username}. Total messages: {len(self.recent_messages)}, User messages since last summary: {self.message_count}")
+        print(f"Added message to {username}. Messages: {len(self.recent_messages)}, Count: {self.message_count}")
         
         # The actual summary update will be triggered from bot.py after checking needs_summary_update()
 
@@ -441,10 +439,9 @@ class StateManager:
         if platform_key in self.users:
             user_state = self.users[platform_key]
             user_state.recent_messages.append(message)
-            if not from_bot:  # Only count user messages for summary triggers
-                user_state.message_count += 1
+            user_state.message_count += 1
             user_state.last_interaction = datetime.now()
-            print(f"Added message to {platform_key}. Messages in memory: {len(user_state.recent_messages)}, User messages since last summary: {user_state.message_count}")
+            print(f"Added message to {platform_key}. Messages: {len(user_state.recent_messages)}, Count: {user_state.message_count}")
             
             # Save state
             await self.save_states()
@@ -469,16 +466,24 @@ class StateManager:
                 print(f"New conversation: {conversation}")
 
                 if changes:
-                    # Update summaries and timestamp
+                    now = datetime.now()
+                    
+                    # Update summaries with current timestamp
                     user_state.summaries["relationship"] = relationship
                     user_state.summaries["last_conversation"] = conversation
-                    user_state.summaries["last_updated"] = datetime.now().isoformat()
+                    user_state.summaries["last_updated"] = now.isoformat()
                     
-                    # Keep only recent messages and reset user message counter
+                    # First save the updated summaries
+                    user_state.summaries["relationship"] = relationship
+                    user_state.summaries["last_conversation"] = conversation
+                    user_state.summaries["last_updated"] = now.isoformat()
+                    
+                    # Then update message history while keeping message count
+                    recent_count = len(user_state.recent_messages[-3:])  # Count of messages we're keeping
                     user_state.recent_messages = user_state.recent_messages[-3:]  # Keep last 3 messages
-                    user_state.message_count = 0  # Reset counter after summary update
+                    user_state.message_count = max(0, user_state.message_count - (len(user_state.recent_messages) - recent_count))
                     
-                    # Save state
+                    # Finally save the state
                     await self.save_states()
                     print(f"Successfully saved updated state for {platform_key}")
                     return True, "Summary updated successfully!"
