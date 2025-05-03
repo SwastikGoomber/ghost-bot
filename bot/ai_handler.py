@@ -1,4 +1,3 @@
-
 from typing import Dict, List, Tuple
 import aiohttp
 import sys
@@ -174,11 +173,10 @@ class AIHandler:
         
         return text.strip()
 
-    async def get_chat_response(self, user_state: Dict) -> str:
+    async def get_chat_response(self, user_state: Dict, current_message: str = None) -> str:
         try:
             print("\n=== Message ===")
             messages = user_state.get('recent_messages', [])
-            current_message = messages[-1]['content'] if messages else ""
             username = user_state.get('username', '').lower()
             platform = user_state.get('platform', 'discord')
             
@@ -270,6 +268,13 @@ class AIHandler:
                     "content": f"RECENT CONVERSATION CONTEXT: {user_state['summaries']['last_conversation']}"
                 })
             
+            # Append current message if provided
+            if current_message:
+                formatted_messages.append({
+                    "role": "user",
+                    "content": current_message
+                })
+                
             payload = {
                 "model": "meta-llama/llama-3.3-70b-instruct:free",
                 "messages": [

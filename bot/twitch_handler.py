@@ -117,7 +117,10 @@ class TwitchBot(commands.Bot):
                 )
 
                 # Get response first to check for rate limits
-                response = await self.ai_handler.get_chat_response(user_state.to_dict())
+                response = await self.ai_handler.get_chat_response(
+                    user_state.to_dict(),
+                    current_message=message.content
+                )
                 
                 # Only store messages if we got a real response (not a rate limit message)
                 if response not in SLEEP_RESPONSES:
