@@ -469,8 +469,9 @@ class StateManager:
                     user_state.summaries["last_conversation"] = conversation
                     user_state.summaries["last_updated"] = now.isoformat()
                     
-                    # Keep only last 3 messages but maintain message count
+                    # Sync message count with actual messages
                     user_state.recent_messages = user_state.recent_messages[-3:]  # Keep last 3 messages
+                    user_state.message_count = len(user_state.recent_messages)  # Reset count to match actual messages
                     
                     # Finally save the state
                     await self.save_states()
