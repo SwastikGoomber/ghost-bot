@@ -271,7 +271,7 @@ class AIHandler:
                 })
             
             payload = {
-                "model": "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
+                "model": "meta-llama/llama-3.3-70b-instruct:free",
                 "messages": [
                     *system_messages,
                     *formatted_messages
