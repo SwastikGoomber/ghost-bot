@@ -198,10 +198,11 @@ class CustomBot(commands.Bot):
                         message.author.nick
                     )
 
-                    # Get response first to check for rate limits
+                    # Get response with state_manager for mentioned users context
                     response = await self.ai_handler.get_chat_response(
                         user_state.to_dict(),
-                        current_message=message.content
+                        current_message=message.content,
+                        state_manager=self.state_manager
                     )
                     
                     # Only store messages if we got a real response (not a rate limit message)

@@ -122,7 +122,8 @@ class AIHandler:
         username = username.lower().strip()  # Ensure case-insensitive comparison
         context = {
             "special_info": None,
-            "relationship": None
+            "relationship": None,
+            "conversation": None
         }
         
         # Convert username to primary name if it's a variant
@@ -140,8 +141,23 @@ class AIHandler:
         # Add relationship info if available
         if user_state and 'summaries' in user_state:
             context["relationship"] = user_state['summaries'].get('relationship', '')
+            context["conversation"] = user_state['summaries'].get('last_conversation', '')
         
         return context
+
+    def find_mentioned_user_state(self, username: str, state_manager) -> Dict:
+        """Find a mentioned user's state from the state manager"""
+        if not state_manager:
+            return None
+            
+        # Look through all users to find matching username
+        for platform_key, user_state in state_manager.users.items():
+            # Check all platform identifiers for this user
+            for platform, data in user_state.identifiers.items():
+                if (data['username'].lower() == username.lower() or 
+                    (data.get('nickname') and data['nickname'].lower() == username.lower())):
+                    return user_state.to_dict()
+        return None
 
     def format_messages(self, messages: List[Dict]) -> str:
         """Format messages for the summary prompt"""
@@ -170,7 +186,7 @@ class AIHandler:
         
         return text.strip()
 
-    async def get_chat_response(self, user_state: Dict, current_message: str = None) -> str:
+    async def get_chat_response(self, user_state: Dict, current_message: str = None, state_manager = None) -> str:
         try:
             print("\n=== Message ===")
             messages = user_state.get('recent_messages', [])
@@ -193,11 +209,16 @@ class AIHandler:
             # Add mentioned users
             mentioned_users = self.extract_usernames(current_message)
             
-            # Add mentioned users' context
+            # Add mentioned users' context with relationship summaries
             for mentioned_user in mentioned_users:
                 if mentioned_user != username:  # Skip if it's the sender
-                    mentioned_context = self.get_user_context(mentioned_user)
-                    if mentioned_context["special_info"] or mentioned_context["relationship"]:
+                    # Get mentioned user's state from state manager
+                    mentioned_user_state = self.find_mentioned_user_state(mentioned_user, state_manager)
+                    mentioned_context = self.get_user_context(mentioned_user, mentioned_user_state)
+                    
+                    if (mentioned_context["special_info"] or 
+                        mentioned_context["relationship"] or 
+                        mentioned_context["conversation"]):
                         user_contexts.append({
                             "username": mentioned_user,
                             "is_sender": False,
@@ -230,35 +251,39 @@ class AIHandler:
             # Add user contexts to system messages with improved formatting
             for context in user_contexts:
                 context_parts = []
-                username = context['username']
+                context_username = context['username']
                 
                 # Start with user identification
                 if context['is_sender']:
-                    context_parts.append(f"IMPORTANT USER CONTEXT - Current Speaker: {username}")
+                    context_parts.append(f"IMPORTANT USER CONTEXT - CURRENT SPEAKER: {context_username}")
                 else:
-                    context_parts.append(f"IMPORTANT USER CONTEXT - Mentioned User: {username}")
+                    context_parts.append(f"MENTIONED USER CONTEXT - MENTIONED USER: {context_username}")
                 
                 # Add special user info if available
                 if context['special_info']:
                     # Get full user data to include variants
-                    user_data = self.special_users.get(self.variant_lookup.get(username, username))
+                    user_data = self.special_users.get(self.variant_lookup.get(context_username, context_username))
                     if user_data:
                         context_parts.append(f"ROLE: {context['special_info']['role']}")
                         context_parts.append(f"CONTEXT: {context['special_info']['context']}")
-                        variants = [v for v in user_data['variants'] if v.lower() != username.lower()]
+                        variants = [v for v in user_data['variants'] if v.lower() != context_username.lower()]
                         if variants:
                             context_parts.append(f"ALSO KNOWN AS: {', '.join(variants)}")
                 
                 # Add relationship history
                 if context['relationship']:
-                    context_parts.append(f"RECENT DYNAMIC: {context['relationship']}")
+                    context_parts.append(f"RELATIONSHIP WITH GHOST: {context['relationship']}")
+                
+                # Add conversation summary for mentioned users
+                if context['conversation'] and not context['is_sender']:
+                    context_parts.append(f"RECENT INTERACTIONS WITH GHOST: {context['conversation']}")
                 
                 system_messages.append({
                     "role": "system",
                     "content": "\n".join(context_parts)
                 })
             
-            # Add recent conversation context if available
+            # Add recent conversation context if available for current speaker
             if user_state.get('summaries', {}).get('last_conversation'):
                 system_messages.append({
                     "role": "system", 
