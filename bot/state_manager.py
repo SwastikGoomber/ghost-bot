@@ -39,7 +39,6 @@ class UserState:
             "last_updated": datetime.now().isoformat()
         }
         self.recent_messages = []
-        self.message_count = 0
         self.last_interaction = datetime.now()
 
     def _generate_variants(self, username: str) -> list:
@@ -80,10 +79,9 @@ class UserState:
         self.name_variants.extend(other_state.name_variants)
         self.name_variants = list(set(self.name_variants))
         
-        # Merge messages and update count
+        # Merge messages - no more message_count logic
         self.recent_messages.extend(other_state.recent_messages)
         self.recent_messages.sort(key=lambda x: datetime.fromisoformat(x['timestamp']))
-        self.message_count += other_state.message_count
         
         # Take the most recent interaction time
         other_interaction = other_state.last_interaction
@@ -108,26 +106,23 @@ class UserState:
             "timestamp": datetime.now().isoformat()
         }
         self.recent_messages.append(message)
-        self.message_count += 1
         self.last_interaction = datetime.now()
-        print(f"Added message to {username}. Messages: {len(self.recent_messages)}, Count: {self.message_count}")
+        print(f"Added message to {username}. Messages: {len(self.recent_messages)}")
         
         # The actual summary update will be triggered from bot.py after checking needs_summary_update()
 
     def needs_summary_update(self) -> bool:
-        """Check if we need to update summaries based on total message count"""
+        """Check if we need to update summaries based on message array length"""
         # Always return False for bot messages to avoid recursive updates
         if self.recent_messages and self.recent_messages[-1]['from_bot']:
             return False
 
-        # After 6 messages (3 user messages + 3 bot responses), update summary
-        if self.message_count >= 10:
-            print(f"Summary update needed: {self.message_count} total messages")
-            # Reset counter for next summary
-            self.message_count = 0
+        # Trigger summary when we have 40+ messages
+        if len(self.recent_messages) >= 40:
+            print(f"Summary update needed: {len(self.recent_messages)} total messages")
             return True
         
-        print(f"No summary update needed: {self.message_count} total messages")
+        print(f"No summary update needed: {len(self.recent_messages)} total messages")
         return False
 
     def to_dict(self) -> dict:
@@ -143,7 +138,6 @@ class UserState:
             "identifiers": self.identifiers,
             "summaries": self.summaries,
             "recent_messages": self.recent_messages,
-            "message_count": self.message_count,
             "last_interaction": self.last_interaction.isoformat()
         }
 
@@ -266,7 +260,7 @@ class StateManager:
                     user_state.identifiers = user_data['identifiers']
                     user_state.summaries = user_data['summaries']
                     user_state.recent_messages = user_data['recent_messages']
-                    user_state.message_count = user_data['message_count']
+                    # Skip message_count loading - we don't use it anymore
                     user_state.last_interaction = datetime.fromisoformat(user_data['last_interaction'])
                     
                     # Store state and track references
@@ -299,7 +293,7 @@ class StateManager:
                 user_state.identifiers = user_data['identifiers']
                 user_state.summaries = user_data['summaries']
                 user_state.recent_messages = user_data['recent_messages']
-                user_state.message_count = user_data['message_count']
+                # Skip message_count loading - we don't use it anymore
                 user_state.last_interaction = datetime.fromisoformat(user_data['last_interaction'])
                 
                 # Store state and track it
@@ -343,7 +337,6 @@ class StateManager:
             # Copy current messages and summaries
             twitch_state.recent_messages = user_state.recent_messages.copy()
             twitch_state.summaries = user_state.summaries.copy()
-            twitch_state.message_count = user_state.message_count
 
             # Update Discord state
             user_state.identifiers = {'discord': discord_data}  # Keep only Discord
@@ -424,15 +417,8 @@ class StateManager:
         if platform_key in self.users:
             user_state = self.users[platform_key]
             user_state.recent_messages.append(message)
-            user_state.message_count += 1
-            
-            # Trigger summary and reset counter every 10 messages
-            if user_state.message_count >= 10:
-                await self.update_user_state(platform_key)
-                user_state.message_count = 0
-            
             user_state.last_interaction = datetime.now()
-            print(f"Added message to {platform_key}. Messages: {len(user_state.recent_messages)}, Count: {user_state.message_count}")
+            print(f"Added message to {platform_key}. Messages: {len(user_state.recent_messages)}")
             
             # Save state
             await self.save_states()
@@ -464,14 +450,8 @@ class StateManager:
                     user_state.summaries["last_conversation"] = conversation
                     user_state.summaries["last_updated"] = now.isoformat()
                     
-                    # First save the updated summaries
-                    user_state.summaries["relationship"] = relationship
-                    user_state.summaries["last_conversation"] = conversation
-                    user_state.summaries["last_updated"] = now.isoformat()
-                    
-                    # Sync message count with actual messages
-                    user_state.recent_messages = user_state.recent_messages[-3:]  # Keep last 3 messages
-                    user_state.message_count = len(user_state.recent_messages)  # Reset count to match actual messages
+                    # Keep only last 20 messages after summarization
+                    user_state.recent_messages = user_state.recent_messages[-20:]
                     
                     # Finally save the state
                     await self.save_states()

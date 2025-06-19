@@ -42,10 +42,7 @@ Provide updates in this format:
 (Write a concise summary of the overall relationship dynamic. Include: how they interact, recurring patterns, Ghost's attitude toward them, and their attitude toward Ghost. Max 3 sentences.)
 
 [CONVERSATION_SUMMARY]
-(Summarize the most relevant and recent interactions. Blend important points from previous summary with new key developments. Focus on themes and significant moments. Max 3 sentences.)
-
-[CHANGES_DETECTED]
-(YES or NO - indicate if there were meaningful changes in relationship dynamic or conversation tone)
+(Summarize the most relevant and recent interactions. Blend important points from previous summary with new key developments. Focus on themes and significant moments. Max 9 sentences.)
 """
 
 class AIResponseError(Exception):
@@ -367,7 +364,7 @@ class AIHandler:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are an analyzer. Provide brief summaries of chat interactions."
+                        "content": "You are an analyzer. Provide updated summaries of chat interactions."
                     },
                     {
                         "role": "user",
@@ -419,7 +416,6 @@ class AIHandler:
                     # Parse sections
                     relationship = ""
                     conversation = ""
-                    changes = False
                     sections = response_text.split("[")
                     
                     print("\nParsing sections:")
@@ -430,19 +426,16 @@ class AIHandler:
                         elif "CONVERSATION_SUMMARY]" in section:
                             conversation = section.split("]")[1].strip()
                             print(f"Conversation: {conversation[:100]}...")
-                        elif "CHANGES_DETECTED]" in section:
-                            changes_text = section.split("]")[1].strip().upper()
-                            changes = "YES" in changes_text
-                            print(f"Changes detected: {changes}")
 
                     print("\n=== Summary Results ===")
-                    print(f"Changed: {'Yes' if changes else 'No'}")
+                    print(f"Updated summaries parsed successfully")
 
                     if not relationship or not conversation:
                         print("Failed to parse summaries from response")
                         return None, None, False
 
-                    return relationship, conversation, changes
+                    # Always return True since we're generating updates
+                    return relationship, conversation, True
 
         except Exception as e:
             print(f"Error in update_summaries: {e}")
