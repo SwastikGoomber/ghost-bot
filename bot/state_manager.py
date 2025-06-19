@@ -113,12 +113,8 @@ class UserState:
 
     def needs_summary_update(self) -> bool:
         """Check if we need to update summaries based on message array length"""
-        # Always return False for bot messages to avoid recursive updates
-        if self.recent_messages and self.recent_messages[-1]['from_bot']:
-            return False
-
-        # Trigger summary when we have 40+ messages
-        if len(self.recent_messages) >= 40:
+        # Trigger summary when we have 50+ messages
+        if len(self.recent_messages) >= 50:
             print(f"Summary update needed: {len(self.recent_messages)} total messages")
             return True
         
@@ -450,8 +446,8 @@ class StateManager:
                     user_state.summaries["last_conversation"] = conversation
                     user_state.summaries["last_updated"] = now.isoformat()
                     
-                    # Keep only last 20 messages after summarization
-                    user_state.recent_messages = user_state.recent_messages[-20:]
+                    # Keep only last 30 messages after summarization
+                    user_state.recent_messages = user_state.recent_messages[-30:]
                     
                     # Finally save the state
                     await self.save_states()

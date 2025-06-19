@@ -330,12 +330,21 @@ class AIHandler:
                     "content": current_message
                 })
                 
+            # payload = {
+            #     "model": "meta-llama/llama-3.3-70b-instruct:free",
+            #     "messages": [
+            #         *system_messages,
+            #         *formatted_messages
+            #     ]
+            # }
             payload = {
                 "model": "meta-llama/llama-3.3-70b-instruct:free",
-                "messages": [
+                 "messages": [
                     *system_messages,
                     *formatted_messages
-                ]
+                ],
+                "temperature": 0.8,        # Balanced creativity (0.7-0.9 good for character)
+                "top_p": 0.9,             # Focus on coherent responses
             }
 
             print(f"\n=== FINAL REQUEST TO MODEL ===")

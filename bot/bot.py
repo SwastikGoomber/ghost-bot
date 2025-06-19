@@ -222,6 +222,8 @@ class CustomBot(commands.Bot):
                             BOT_NAME
                         )
 
+                        print(f"DEBUG: User has {len(user_state.recent_messages)} messages, needs_summary: {user_state.needs_summary_update()}")
+
                         # Only check for summary updates on real conversations
                         if user_state.needs_summary_update():
                             success, msg = await self.state_manager.update_user_state(platform_key)
