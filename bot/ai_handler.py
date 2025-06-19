@@ -204,6 +204,17 @@ class AIHandler:
         
         return text.strip()
 
+    def truncate_content(self, content: str, max_lines: int = 200) -> str:
+        """Truncate content with first 3 and last 3 lines visible"""
+        lines = content.split('\n')
+        if len(lines) <= max_lines:
+            return content
+        
+        first_3 = lines[:3]
+        last_3 = lines[-3:]
+        
+        return '\n'.join(first_3) + f'\n...... ({len(lines) - 6} lines truncated) ......\n' + '\n'.join(last_3)
+
     async def get_chat_response(self, user_state: Dict, current_message: str = None, state_manager = None) -> str:
         try:
             print(f"\n=== CHAT REQUEST ===")
@@ -335,12 +346,54 @@ class AIHandler:
             # Show the actual content being sent to model
             print(f"\n=== SYSTEM CONTEXT ===")
             for i, msg in enumerate(system_messages):
-                print(f"[{i+1}] {msg['content'][:100]}{'...' if len(msg['content']) > 100 else ''}")
+                msg_type = ""
+                content = msg['content']
+                
+                # Check what type of message this is
+                if content.startswith("[CORE IDENTITY]"):
+                    msg_type = "CORE IDENTITY"
+                    content = self.truncate_content(content)
+                elif content.startswith("CRITICAL:"):
+                    msg_type = "CRITICAL"
+                    content = self.truncate_content(content)
+                elif content.startswith("IMPORTANT:"):
+                    msg_type = "PLATFORM CONSTRAINT"
+                    content = self.truncate_content(content)
+                elif content.startswith("CURRENT SPEAKER:"):
+                    msg_type = "CURRENT SPEAKER"
+                    # DON'T truncate user context
+                elif content.startswith("MENTIONED USER:"):
+                    msg_type = "MENTIONED USER"
+                    # DON'T truncate user context
+                elif content.startswith("RECENT CONVERSATION CONTEXT:"):
+                    msg_type = "CONVERSATION CONTEXT"
+                    # DON'T truncate conversation context
+                else:
+                    msg_type = "OTHER"
+                    content = self.truncate_content(content)
+                
+                print(f"[{i+1}] {msg_type}")
+                print(content)
+                print("")
                 
             print(f"\n=== CONVERSATION HISTORY ===")
-            for msg in formatted_messages[-5:]:  # Show last 5 messages only
-                role = "USER" if msg['role'] == 'user' else "GHOST"
-                print(f"[{role}] {msg['content']}")
+            # Show first 3 and last 3 messages
+            if len(formatted_messages) <= 6:
+                for msg in formatted_messages:
+                    role = "USER" if msg['role'] == 'user' else "GHOST"
+                    print(f"[{role}] {msg['content']}")
+            else:
+                # Show first 3
+                for msg in formatted_messages[:3]:
+                    role = "USER" if msg['role'] == 'user' else "GHOST"
+                    print(f"[{role}] {msg['content']}")
+                
+                print(f"...... ({len(formatted_messages) - 6} messages truncated) ......")
+                
+                # Show last 3
+                for msg in formatted_messages[-3:]:
+                    role = "USER" if msg['role'] == 'user' else "GHOST"
+                    print(f"[{role}] {msg['content']}")
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
