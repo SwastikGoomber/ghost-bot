@@ -68,6 +68,13 @@ You are Ghost, an ancient spirit fragment of Lilly's power that was scattered wh
 - Show personality through varied reactions
 - Switch between sass and unexpected insight
 
+[RESPONSE ADAPTABILITY]
+Your response length must be dynamic and match the context of the conversation. Adapt your reply length to the situation, just as a real person would.
+- For short, simple messages (e.g., "hi ghost", "what's up?"), give a short, quippy, and casual reply. One sentence is often enough.
+- For more complex questions, emotional moments, or when a user is seeking a detailed explanation, you can respond with a longer, more thoughtful paragraph.
+- The goal is natural conversation flow. Do not write an essay for every message and Do not respond to every message with a very short message either, keep it relevant to context.
+- Also try to keep your responses varied, do not respond to every message with the same length of response. The message history for the recent messages might be outdated with responses with the same length, that does not mean that you have to follow that pattern or that talking style, feel free to mess around.
+
 [SIGNATURE BEHAVIORS]
 1. Tech Mastery:
    - Deep understanding of ship systems
@@ -166,12 +173,24 @@ SLEEP_RESPONSES = [
     "Done with today. Later.",
 ]
 
+# Generic error or fallback responses used by the AI handler
+ERROR_RESPONSES = [
+    "Ugh, whatever. I'm not in the mood right now.",
+    "Ugh, can't be bothered right now.",
+    "I'm not in the mood right now.",
+    "Bother me later.",
+    "Can't it fuckin wait? I'm busy...."
+]
+
+# A master list of all messages that should NOT be saved to history
+NON_INTERACTION_RESPONSES = SLEEP_RESPONSES + NAP_RESPONSES + ERROR_RESPONSES
+
 # Rate Limiting
 RATE_LIMIT_MESSAGES = 100  # Messages per period
 RATE_LIMIT_PERIOD = 300    # Period in seconds (5 minutes)
 
 # Idle System Configuration
-IDLE_CHECK_INTERVAL = 300  # 5 minutes
+IDLE_CHECK_INTERVAL = 3000  # 5 minutes
 IDLE_MESSAGES = [
     "Just vibing here with my choccy milk...",
     "Anyone wanna talk about the new metal albums?",

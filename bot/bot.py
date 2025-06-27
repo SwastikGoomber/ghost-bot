@@ -205,8 +205,8 @@ class CustomBot(commands.Bot):
                         state_manager=self.state_manager
                     )
                     
-                    # Only store messages if we got a real response (not a rate limit message)
-                    if response not in SLEEP_RESPONSES:
+                    # Only store messages if we got a real response
+                    if response not in NON_INTERACTION_RESPONSES:
                         # Store the conversation pair
                         await self.state_manager.add_message(
                             platform_key,

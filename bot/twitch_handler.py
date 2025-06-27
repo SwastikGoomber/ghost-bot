@@ -21,7 +21,8 @@ from config import (
     BOT_NAME,
     PLATFORM_SETTINGS,
     BOT_PERSONA,
-    SLEEP_RESPONSES
+    SLEEP_RESPONSES,
+    NON_INTERACTION_RESPONSES
 )
 
 class TwitchBot(commands.Bot):
@@ -122,8 +123,8 @@ class TwitchBot(commands.Bot):
                     current_message=message.content
                 )
                 
-                # Only store messages if we got a real response (not a rate limit message)
-                if response not in SLEEP_RESPONSES:
+                # Only store messages if we got a real response
+                if response not in NON_INTERACTION_RESPONSES:
                     # Store the conversation pair
                     await self.state_manager.add_message(
                         platform_key,

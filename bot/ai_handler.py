@@ -13,7 +13,8 @@ try:
         PLATFORM_SETTINGS,
         BOT_NAME,
         IDLE_MESSAGES,
-        SLEEP_RESPONSES
+        SLEEP_RESPONSES,
+        ERROR_RESPONSES
     )
 except Exception as e:
     print(f"Config Error: {e}")
@@ -338,12 +339,12 @@ class AIHandler:
             #     ]
             # }
             payload = {
-                "model": "meta-llama/llama-3.3-70b-instruct:free",
+                "model": "qwen/qwen-2.5-72b-instruct:free",
                  "messages": [
                     *system_messages,
                     *formatted_messages
                 ],
-                "temperature": 0.8,        # Balanced creativity (0.7-0.9 good for character)
+                "temperature": 1.2,        # Balanced creativity (0.7-0.9 good for character)
                 "top_p": 0.9,             # Focus on coherent responses
             }
 
@@ -416,11 +417,11 @@ class AIHandler:
                                 print("Rate limit hit, using fallback")
                                 return random.choice(SLEEP_RESPONSES)
                             print(f"API Error: {data['error']}")
-                            return "Ugh, whatever. I'm not in the mood right now."
+                            return random.choice(ERROR_RESPONSES)
                             
                         if 'choices' not in data:
                             print("No response choices")
-                            return "Ugh, can't be bothered right now."
+                            return random.choice(ERROR_RESPONSES)
                         
                         response_text = data['choices'][0]['message']['content']
                         print(f"Raw response: {response_text}")
@@ -445,7 +446,7 @@ class AIHandler:
         except Exception as e:
             print(f"Error getting chat response: {e}")
             traceback.print_exc()  # Add full traceback for debugging
-            return "Ugh, can't be bothered right now."
+            return random.choice(ERROR_RESPONSES)
 
     async def update_summaries(self, user_state: Dict) -> Tuple[str, str, bool]:
         try:
