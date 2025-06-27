@@ -53,3 +53,7 @@ Thumbs.db
 test_*.py
 test_*.json
 temp_*.txt
+
+
+#misc
+TODO.md

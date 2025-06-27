@@ -189,7 +189,7 @@ class AIHandler:
     def clean_response(self, text: str) -> str:
         # Remove common patterns and formatting
         text = text.replace("USER:", "").replace("ASSISTANT:", "").strip()
-        text = text.replace("*", "").strip()
+        # text = text.replace("*", "").strip()
         text = re.sub(r'\[Ghost\]:', '', text, flags=re.IGNORECASE)
         text = text.replace('Ghost:', '').strip()
         text = text.strip('"').strip("'")
@@ -201,7 +201,7 @@ class AIHandler:
         # Clean formatting
         text = re.sub(r'\([^)]*\)', '', text)  # Remove parentheses
         text = re.sub(r'([!?.]){2,}', r'\1', text)  # Fix punctuation
-        text = re.sub(r'[\U0001F300-\U0001F9FF]', '', text)  # Remove emojis
+        # text = re.sub(r'[\U0001F300-\U0001F9FF]', '', text)  # Remove emojis
         
         return text.strip()
 
@@ -339,13 +339,14 @@ class AIHandler:
             #     ]
             # }
             payload = {
-                "model": "qwen/qwen-2.5-72b-instruct:free",
+                "model": "meta-llama/llama-4-scout:free",   #qwen/qwen-2.5-72b-instruct:free
                  "messages": [
                     *system_messages,
                     *formatted_messages
                 ],
                 "temperature": 1.2,        # Balanced creativity (0.7-0.9 good for character)
                 "top_p": 0.9,             # Focus on coherent responses
+                "max_tokens": 2000
             }
 
             print(f"\n=== FINAL REQUEST TO MODEL ===")

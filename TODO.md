@@ -105,3 +105,34 @@
 - Clear labeling in system messages prevents AI confusion
 - Backward compatibility for existing UserState data
 - Cross-platform considerations (Discord vs Twitch capabilities)
+
+---
+
+## 6. Centralize Configuration
+
+**Problem:** Many configuration values (e.g., message history length to keep, summary trigger count) are hardcoded directly in the Python files (`state_manager.py`, etc.). This makes them difficult to find and adjust.
+
+**Solution:** Move all user-adjustable parameters and magic numbers into `config.py`.
+
+**Implementation Details:**
+
+- **Identify hardcoded values:** Search the codebase for numbers or strings that act as configuration.
+- **Move to `config.py`:** Create new, clearly named variables in `config.py` for these values.
+- **Import and replace:** Import the new config variables into the relevant files and replace the hardcoded values.
+- **Examples:** `MESSAGES_TO_RETAIN_AFTER_SUMMARY = 3`, `SUMMARY_TRIGGER_MESSAGE_COUNT = 50`.
+
+**Why important:** Improves maintainability and allows for quick tuning of the bot's behavior without digging through code logic.
+
+## 7. Emoji Support
+
+**Problem:** Ghost's personality is strictly text-only. The `clean_response` function actively strips all emojis, which can make the bot feel flat or less expressive in a modern chat environment.
+
+**Solution:** Allow the model to use emojis, but within character.
+
+**Implementation Details:**
+
+- **Modify `clean_response`:** Remove the line that strips emojis from the AI's output.
+- **Update prompt:** Add a guideline to the `BOT_PERSONA` telling the AI it *can* use emojis, but sparingly and only when it fits the sassy, teenage dragon character. No emoji spam.
+- **Example Guideline:** "You can use emojis to add to your sassy tone, but don't overdo it. A single, well-placed emoji is more effective than a dozen."
+
+**Why important:** Increases the bot's expressiveness and makes it feel more natural and engaging to a younger, online audience.
