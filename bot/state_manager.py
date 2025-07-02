@@ -173,7 +173,8 @@ class StateManager:
     def __del__(self):
         """Cleanup database connection"""
         if self.db:
-            self.db.close()
+            # Don't call async close() in destructor - it should be handled in shutdown
+            pass
 
     async def save_states(self):
         """Save all states"""
