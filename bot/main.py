@@ -121,7 +121,7 @@ async def initialize_components() -> Tuple[AIHandler, StateManager, CustomBot, T
         logger.error(f"Initialization error: {e}", exc_info=True)
         raise
 
-async def shutdown(discord_bot=None, twitch_bot=None, state_manager=None):
+async def shutdown(ai_handler=None, state_manager=None, discord_bot=None, twitch_bot=None):
     """Handle graceful shutdown of components"""
     logger.info("Initiating graceful shutdown...")
     
@@ -169,21 +169,57 @@ async def main():
         
         # Start both bots
         logger.info("Starting bots...")
-        tasks = []
-        tasks.append(asyncio.create_task(discord_bot.start(DISCORD_TOKEN)))
-        tasks.append(asyncio.create_task(twitch_bot.start()))
         
-        # Wait for shutdown signal or bot failure
-        done, pending = await asyncio.wait(
-            tasks + [asyncio.create_task(shutdown_event.wait())],
-            return_when=asyncio.FIRST_COMPLETED
-        )
+        # Always start Discord bot
+        discord_task = asyncio.create_task(discord_bot.start(DISCORD_TOKEN))
+        twitch_task = asyncio.create_task(twitch_bot.start())
         
-        # Check if a bot task failed
-        for task in done:
-            if task in tasks and task.exception():
-                logger.error("Bot task failed", exc_info=task.exception())
-                raise task.exception()
+        logger.info("Both Discord and Twitch bots starting...")
+        
+        # Monitor tasks and handle failures gracefully
+        active_tasks = [discord_task, twitch_task]
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+        
+        while active_tasks:
+            done, pending = await asyncio.wait(
+                active_tasks + [shutdown_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Check if shutdown was requested
+            if shutdown_task in done:
+                logger.info("Shutdown requested")
+                break
+            
+            # Check for failed tasks
+            for task in done:
+                if task in active_tasks:
+                    exception = task.exception()
+                    if exception:
+                        logger.error("Bot task failed", exc_info=exception)
+                        
+                        # Handle Twitch auth failures gracefully
+                        if task == twitch_task and "invalid client secret" in str(exception):
+                            logger.warning("Twitch authentication failed - continuing with Discord only")
+                            active_tasks.remove(task)
+                            continue
+                        
+                        # Handle Discord failures - these are fatal
+                        if task == discord_task:
+                            logger.error("Discord bot failed - shutting down")
+                            raise exception
+                        
+                        # Remove failed task from active list
+                        active_tasks.remove(task)
+                    else:
+                        # Bot completed normally (shouldn't happen)
+                        logger.info("Bot task completed normally")
+                        active_tasks.remove(task)
+            
+            # If no active tasks remain, break
+            if not active_tasks:
+                logger.warning("All bot tasks have stopped")
+                break
             
     except Exception as e:
         logger.error(f"Fatal error occurred: {e}", exc_info=True)

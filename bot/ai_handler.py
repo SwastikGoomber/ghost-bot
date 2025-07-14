@@ -339,7 +339,7 @@ class AIHandler:
             #     ]
             # }
             payload = {
-                "model": "meta-llama/llama-4-scout:free",   #qwen/qwen-2.5-72b-instruct:free
+                "model": "google/gemma-3-27b-it:free",   #qwen/qwen-2.5-72b-instruct:free
                  "messages": [
                     *system_messages,
                     *formatted_messages

@@ -27,11 +27,11 @@ from config import (
 
 class TwitchBot(commands.Bot):
     def __init__(self, state_manager: StateManager = None, ai_handler: AIHandler = None):
-        # Try without bot_id first, as it might not be required in all versions
         super().__init__(
             token=TWITCH_TOKEN,
             client_id=TWITCH_CLIENT_ID,
             client_secret=TWITCH_CLIENT_SECRET,
+            bot_id=TWITCH_CLIENT_ID,  # Required parameter - typically same as client_id
             nick=TWITCH_BOT_NAME,
             prefix='!',
             initial_channels=[TWITCH_CHANNEL_NAME]
