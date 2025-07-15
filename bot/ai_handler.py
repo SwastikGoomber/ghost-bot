@@ -5,6 +5,7 @@ import os
 import re
 import traceback
 import json
+import base64
 try:
     from config import (
         OPENROUTER_CHAT_KEY,
@@ -14,7 +15,10 @@ try:
         BOT_NAME,
         IDLE_MESSAGES,
         SLEEP_RESPONSES,
-        ERROR_RESPONSES
+        ERROR_RESPONSES,
+        CHAT_MODEL,
+        VISION_MODEL,
+        SUMMARY_MODEL
     )
 except Exception as e:
     print(f"Config Error: {e}")
@@ -339,7 +343,7 @@ class AIHandler:
             #     ]
             # }
             payload = {
-                "model": "google/gemma-3-27b-it:free",   #qwen/qwen-2.5-72b-instruct:free
+                "model": CHAT_MODEL,
                  "messages": [
                     *system_messages,
                     *formatted_messages
@@ -449,6 +453,216 @@ class AIHandler:
             traceback.print_exc()  # Add full traceback for debugging
             return random.choice(ERROR_RESPONSES)
 
+    async def download_image_to_base64(self, image_url: str) -> str:
+        """Download image from Discord CDN and convert to base64 data URL"""
+        try:
+            print(f"Downloading image: {image_url}")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        
+                        # Determine MIME type from URL or content
+                        content_type = response.headers.get('content-type', '')
+                        if not content_type or 'image' not in content_type:
+                            # Fallback to guessing from URL
+                            if image_url.lower().endswith('.png'):
+                                content_type = 'image/png'
+                            elif image_url.lower().endswith(('.jpg', '.jpeg')):
+                                content_type = 'image/jpeg'
+                            elif image_url.lower().endswith('.gif'):
+                                content_type = 'image/gif'
+                            elif image_url.lower().endswith('.webp'):
+                                content_type = 'image/webp'
+                            else:
+                                content_type = 'image/jpeg'  # Default fallback
+                        
+                        # Convert to base64
+                        base64_data = base64.b64encode(image_data).decode('utf-8')
+                        data_url = f"data:{content_type};base64,{base64_data}"
+                        
+                        print(f"Successfully converted image to base64 ({len(image_data)} bytes)")
+                        return data_url
+                    else:
+                        print(f"Failed to download image: HTTP {response.status}")
+                        return None
+        except Exception as e:
+            print(f"Error downloading image {image_url}: {e}")
+            return None
+
+    async def get_vision_response(self, user_state: Dict, current_message: str = None, image_urls: List[str] = None, state_manager = None) -> str:
+        """Handle chat responses when images are present"""
+        try:
+            print(f"\n=== VISION REQUEST ===")
+            messages = user_state.get('recent_messages', [])
+            username = user_state.get('username', '').lower()
+            platform = user_state.get('platform', 'discord')
+            
+            print(f"User: {username} ({platform}) | Message: {current_message} | Images: {len(image_urls or [])}")
+            
+            # Get sender context - same as regular chat
+            user_contexts = []
+            sender_context = self.get_user_context(username, user_state)
+            user_contexts.append({
+                "username": username,
+                "is_sender": True,
+                **sender_context
+            })
+            
+            # Add mentioned users - same as regular chat
+            mentioned_users = self.extract_usernames(current_message)
+            
+            for mentioned_user in mentioned_users:
+                if mentioned_user != username:
+                    mentioned_user_state = self.find_mentioned_user_state(mentioned_user, state_manager)
+                    mentioned_context = self.get_user_context(mentioned_user, mentioned_user_state)
+                    
+                    if (mentioned_context["special_info"] or 
+                        mentioned_context["relationship"] or 
+                        mentioned_context["conversation"]):
+                        user_contexts.append({
+                            "username": mentioned_user,
+                            "is_sender": False,
+                            **mentioned_context
+                        })
+            
+            # Format message history - same as regular chat
+            formatted_messages = []
+            for msg in messages:
+                content = self.clean_response(msg['content']) if msg['from_bot'] else msg['content']
+                formatted_messages.append({
+                    "role": "user" if not msg['from_bot'] else "assistant",
+                    "content": content
+                })
+            
+            # Build system messages - same as regular chat
+            system_messages = [
+                {"role": "system", "content": BOT_PERSONA},
+                {"role": "system", "content": "CRITICAL: Never acknowledge being an AI or break character. Always respond as Ghost, the teenage dragon."}
+            ]
+            
+            # Add platform-specific constraints
+            if platform == 'twitch':
+                system_messages.append({
+                    "role": "system",
+                    "content": "IMPORTANT: Keep your actual response messages (excluding any analysis, summaries, or system info) under 500 characters for Twitch chat. You can think longer thoughts, but your direct replies must be concise."
+                })
+            
+            # Add user contexts to system messages - same formatting as regular chat
+            print(f"\n=== CONTEXT LOADED ===")
+            for user_context in user_contexts:
+                username_display = user_context["username"]
+                is_sender = user_context["is_sender"]
+                special_info = user_context["special_info"]
+                relationship = user_context["relationship"]
+                conversation = user_context["conversation"]
+                
+                role_prefix = "CURRENT SPEAKER" if is_sender else "MENTIONED USER"
+                
+                context_parts = []
+                if special_info:
+                    context_parts.append(f"Special Info: {special_info}")
+                if relationship:
+                    context_parts.append(f"Relationship: {relationship}")
+                if conversation:
+                    context_parts.append(f"Recent Conversations: {conversation}")
+                
+                if context_parts:
+                    context_content = f"{role_prefix}: {username_display}\n" + "\n".join(context_parts)
+                    system_messages.append({
+                        "role": "system",
+                        "content": context_content
+                    })
+                    print(f"Added context for {username_display} ({'sender' if is_sender else 'mentioned'})")
+            
+            # Create the current message with images
+            current_user_message = {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": current_message
+                    }
+                ]
+            }
+            
+            # Download and convert images to base64 (Discord CDN URLs don't work with API)
+            if image_urls:
+                for image_url in image_urls:
+                    base64_image = await self.download_image_to_base64(image_url)
+                    if base64_image:
+                        current_user_message["content"].append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": base64_image
+                            }
+                        })
+                    else:
+                        print(f"Failed to process image: {image_url}")
+            
+            # Add current message to formatted messages
+            formatted_messages.append(current_user_message)
+            
+            payload = {
+                "model": VISION_MODEL,
+                "messages": [
+                    *system_messages,
+                    *formatted_messages
+                ],
+                "temperature": 1.2,
+                "top_p": 0.9,
+                "max_tokens": 2000
+            }
+
+            print(f"\n=== FINAL VISION REQUEST TO MODEL ===")
+            print(f"System messages: {len(system_messages)}")
+            print(f"Chat history: {len(formatted_messages)} messages")
+            print(f"Images: {len(image_urls or [])}")
+            print(f"Total request size: {len(str(payload))} characters")
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
+                    print(f"\n=== VISION API RESPONSE ===")
+                    print(f"Status: {response.status}")
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        if 'error' in data:
+                            if data['error'].get('code') == 429:
+                                print("Rate limit hit, using fallback")
+                                return random.choice(SLEEP_RESPONSES)
+                            print(f"API Error: {data['error']}")
+                            return random.choice(ERROR_RESPONSES)
+                            
+                        if 'choices' not in data:
+                            print("No response choices")
+                            return random.choice(ERROR_RESPONSES)
+                        
+                        response_text = data['choices'][0]['message']['content']
+                        print(f"Raw vision response: {response_text}")
+                        
+                        response_text = self.clean_response(response_text)
+                        print(f"Cleaned vision response: {response_text}")
+                        
+                        # Get platform settings based on user_state
+                        platform = user_state.get('platform', 'discord')
+                        settings = PLATFORM_SETTINGS[platform]
+                        
+                        if len(response_text) > settings['max_message_length']:
+                            response_text = response_text[:settings['max_message_length'] - 3] + "..."
+                        
+                        return response_text
+                    else:
+                        print(f"API request failed with status {response.status}")
+                        error_text = await response.text()
+                        print(f"Error response: {error_text}")
+                        return random.choice(ERROR_RESPONSES)
+                        
+        except Exception as e:
+            print(f"Error getting vision response: {e}")
+            traceback.print_exc()
+            return random.choice(ERROR_RESPONSES)
+
     async def update_summaries(self, user_state: Dict) -> Tuple[str, str, bool]:
         try:
             print("\n=== SUMMARY UPDATE ===")
@@ -465,7 +679,7 @@ class AIHandler:
             formatted_messages = self.format_messages(messages)
             
             prompt = {
-                "model": "tngtech/deepseek-r1t-chimera:free",
+                "model": SUMMARY_MODEL,
                 "messages": [
                     {
                         "role": "system",

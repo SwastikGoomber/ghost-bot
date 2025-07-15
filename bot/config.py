@@ -31,6 +31,11 @@ TWITCH_BOT_NAME = os.getenv('TWITCH_BOT_NAME')
 OPENROUTER_CHAT_KEY = os.getenv('OPENROUTER_CHAT_KEY')
 OPENROUTER_SUMMARY_KEY = os.getenv('OPENROUTER_SUMMARY_KEY')
 
+# AI Model Configuration
+CHAT_MODEL = "google/gemma-3-27b-it:free"
+VISION_MODEL = "google/gemma-3-27b-it:free"  # Gemma 3 supports multimodal input
+SUMMARY_MODEL = "tngtech/deepseek-r1t-chimera:free"
+
 BOT_NAME = "Ghost"
 
 # Personality configuration

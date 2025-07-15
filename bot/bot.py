@@ -26,6 +26,19 @@ class CustomBot(commands.Bot):
         self.minute_requests = deque(maxlen=20)
         self.nap_until = None
 
+    def extract_image_urls(self, message):
+        """Extract image URLs from Discord message attachments"""
+        image_urls = []
+        
+        if message.attachments:
+            for attachment in message.attachments:
+                # Check if attachment is an image
+                if any(attachment.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']):
+                    image_urls.append(attachment.url)
+                    print(f"Found image attachment: {attachment.filename} -> {attachment.url}")
+        
+        return image_urls
+
     async def setup_hook(self):
         # Initialize state manager if using MongoDB
         if os.environ.get('MONGODB_URI'):
@@ -198,12 +211,25 @@ class CustomBot(commands.Bot):
                         message.author.nick
                     )
 
-                    # Get response with state_manager for mentioned users context
-                    response = await self.ai_handler.get_chat_response(
-                        user_state.to_dict(),
-                        current_message=message.content,
-                        state_manager=self.state_manager
-                    )
+                    # Check for image attachments
+                    image_urls = self.extract_image_urls(message)
+                    
+                    # Choose appropriate response method based on whether images are present
+                    if image_urls:
+                        print(f"Processing message with {len(image_urls)} images using vision model")
+                        response = await self.ai_handler.get_vision_response(
+                            user_state.to_dict(),
+                            current_message=message.content,
+                            image_urls=image_urls,
+                            state_manager=self.state_manager
+                        )
+                    else:
+                        # Use regular text model for text-only messages
+                        response = await self.ai_handler.get_chat_response(
+                            user_state.to_dict(),
+                            current_message=message.content,
+                            state_manager=self.state_manager
+                        )
                     
                     # Only store messages if we got a real response
                     if response not in NON_INTERACTION_RESPONSES:
