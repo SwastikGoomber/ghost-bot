@@ -10,6 +10,11 @@ from state_manager import StateManager
 from ai_handler import AIHandler
 import traceback
 
+# Import cone system components
+from cone_manager import ConeManager
+from cone_webhooks import ConeWebhookManager
+from text_transformer import TextTransformer
+
 # Get the guild ID from environment or config
 DISCORD_GUILD_ID = os.getenv('DISCORD_GUILD_ID')
 
@@ -25,6 +30,19 @@ class CustomBot(commands.Bot):
         self.daily_requests = 0
         self.minute_requests = deque(maxlen=20)
         self.nap_until = None
+        
+        # Initialize cone system
+        self.cone_manager = ConeManager(self.state_manager)
+        self.cone_webhooks = ConeWebhookManager()
+        self.text_transformer = TextTransformer()
+
+    async def close(self):
+        """Clean up when bot shuts down."""
+        try:
+            await self.cone_webhooks.cleanup_all_webhooks()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        await super().close()
 
     def extract_image_urls(self, message):
         """Extract image URLs from Discord message attachments"""
@@ -180,6 +198,11 @@ class CustomBot(commands.Bot):
 
         try:
             platform_key = f"discord_{message.author.id}"
+            
+            # PRIORITY 1: Check if user is coned and handle their message
+            if await self.cone_manager.is_coned(str(message.author.id)):
+                await self.handle_coned_message(message)
+                return
 
             if message.content.lower().startswith('!'):
                 if message.content.lower() == "!update_summary":
@@ -265,6 +288,91 @@ class CustomBot(commands.Bot):
             # No else clause to store messages that don't trigger a response
         except Exception as e:
             print(f"Error in on_message: {e}")
+            traceback.print_exc()
+
+    async def handle_coned_message(self, message):
+        """Handle message from a coned user - delete original and send transformed version."""
+        try:
+            user_id = str(message.author.id)
+            original_content = message.content
+            
+            # Get cone data
+            cone_data = await self.cone_manager.get_cone_data(user_id)
+            if not cone_data:
+                return  # User not coned anymore
+                
+            effect = cone_data['effect']
+            
+            # Check conditions before processing
+            condition_met = await self.cone_manager.check_conditions(user_id, original_content)
+            if condition_met:
+                await message.channel.send(f"🎉 {message.author.mention} has been unconed! They met the condition.")
+                return
+            
+            # Delete original message
+            try:
+                await message.delete()
+            except discord.Forbidden:
+                # If we can't delete, send a note
+                await message.channel.send(f"⚠️ I can't delete messages! {message.author.mention} is coned but I need delete permissions.")
+                return
+            
+            # Transform the message
+            transformed_content = self.text_transformer.transform(original_content, effect)
+            
+            # Try to send via webhook first
+            webhook_success = await self.cone_webhooks.send_cone_message(
+                message.author, 
+                message.channel, 
+                transformed_content
+            )
+            
+            # If webhook fails, use fallback
+            if not webhook_success:
+                await self.cone_webhooks.send_fallback_message(
+                    message.channel,
+                    message.author,
+                    transformed_content
+                )
+            
+            # If the transformed message mentions ghost, send it to AI too
+            message_lower = transformed_content.lower()
+            name_mentions = ['ghost', 'ghosty']
+            contains_name = any(name in message_lower for name in name_mentions)
+            
+            if contains_name:
+                # Get user state and send transformed message to AI
+                user_state, _ = await self.state_manager.get_user_state(
+                    str(message.author.id),
+                    message.author.name,
+                    "discord",
+                    message.author.id,
+                    message.channel.id,
+                    message.guild.id if message.guild else None
+                )
+                
+                # Send transformed message to AI
+                response = await self.ai_handler.get_chat_response(
+                    user_state, 
+                    transformed_content, 
+                    self.state_manager
+                )
+                
+                # Store the interaction
+                await self.state_manager.add_interaction(
+                    str(message.author.id),
+                    transformed_content,
+                    response,
+                    "discord"
+                )
+                
+                # Send AI response
+                if len(response) > 2000:
+                    response = response[:1997] + "..."
+                await message.channel.send(response)
+                
+        except Exception as e:
+            print(f"Error handling coned message: {e}")
             traceback.print_exc()
 
 def run_bot():

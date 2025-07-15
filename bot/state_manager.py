@@ -127,7 +127,7 @@ class UserState:
         first_platform = list(self.identifiers.keys())[0]
         first_platform_data = self.identifiers[first_platform]
         
-        return {
+        result = {
             "user_id": first_platform_data['user_id'],
             "username": self.primary_name,
             "platform": first_platform,
@@ -136,6 +136,18 @@ class UserState:
             "recent_messages": self.recent_messages,
             "last_interaction": self.last_interaction.isoformat()
         }
+        
+        # Include cone data if it exists
+        if hasattr(self, 'cone') and self.cone is not None:
+            cone_data = self.cone.copy()
+            # Convert datetime objects to ISO format strings
+            if 'expires_at' in cone_data and hasattr(cone_data['expires_at'], 'isoformat'):
+                cone_data['expires_at'] = cone_data['expires_at'].isoformat()
+            if 'created_at' in cone_data and hasattr(cone_data['created_at'], 'isoformat'):
+                cone_data['created_at'] = cone_data['created_at'].isoformat()
+            result["cone"] = cone_data
+            
+        return result
 
 class StateManager:
     # Class constant for state file
@@ -260,6 +272,16 @@ class StateManager:
                     # Skip message_count loading - we don't use it anymore
                     user_state.last_interaction = datetime.fromisoformat(user_data['last_interaction'])
                     
+                    # Restore cone data if it exists
+                    if 'cone' in user_data and user_data['cone'] is not None:
+                        # Convert datetime strings back to datetime objects
+                        cone_data = user_data['cone'].copy()
+                        if 'expires_at' in cone_data:
+                            cone_data['expires_at'] = datetime.fromisoformat(cone_data['expires_at'].replace('Z', '+00:00'))
+                        if 'created_at' in cone_data:
+                            cone_data['created_at'] = datetime.fromisoformat(cone_data['created_at'].replace('Z', '+00:00'))
+                        user_state.cone = cone_data
+                    
                     # Store state and track references
                     self.users[key] = user_state
                     discord_states[user_data['user_id']] = user_state
@@ -292,6 +314,16 @@ class StateManager:
                 user_state.recent_messages = user_data['recent_messages']
                 # Skip message_count loading - we don't use it anymore
                 user_state.last_interaction = datetime.fromisoformat(user_data['last_interaction'])
+                
+                # Restore cone data if it exists
+                if 'cone' in user_data and user_data['cone'] is not None:
+                    # Convert datetime strings back to datetime objects
+                    cone_data = user_data['cone'].copy()
+                    if 'expires_at' in cone_data:
+                        cone_data['expires_at'] = datetime.fromisoformat(cone_data['expires_at'].replace('Z', '+00:00'))
+                    if 'created_at' in cone_data:
+                        cone_data['created_at'] = datetime.fromisoformat(cone_data['created_at'].replace('Z', '+00:00'))
+                    user_state.cone = cone_data
                 
                 # Store state and track it
                 self.users[key] = user_state
@@ -536,3 +568,29 @@ class StateManager:
         new_user = UserState(user_id, username, platform, nickname)
         self.users[platform_key] = new_user
         return new_user, None
+
+    async def find_user_by_username(self, username: str) -> str:
+        """Find user ID by username across all platforms."""
+        username_lower = username.lower()
+        
+        # Search through all users
+        for platform_key, user_data in self.users.items():
+            # Check the username stored in user data
+            if hasattr(user_data, 'username') and user_data.username.lower() == username_lower:
+                # Extract user ID from platform key
+                if platform_key.startswith('discord_'):
+                    return platform_key.replace('discord_', '')
+                elif platform_key.startswith('twitch_'):
+                    return platform_key.replace('twitch_', '')
+                else:
+                    return platform_key
+                    
+            # Also check nicknames/display names if available
+            if hasattr(user_data, 'identifiers'):
+                for platform, ids in user_data.identifiers.items():
+                    if (ids.get('username', '').lower() == username_lower or 
+                        ids.get('nickname', '').lower() == username_lower or
+                        ids.get('display_name', '').lower() == username_lower):
+                        return ids.get('user_id', platform_key)
+        
+        return None

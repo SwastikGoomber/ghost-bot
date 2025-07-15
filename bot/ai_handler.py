@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import aiohttp
 import sys
 import os
@@ -18,6 +18,7 @@ try:
         ERROR_RESPONSES,
         CHAT_MODEL,
         VISION_MODEL,
+        CONE_PERMISSIONS,
         SUMMARY_MODEL
     )
 except Exception as e:
@@ -67,6 +68,39 @@ class AIHandler:
         
         print("=== Initializing Bot ===")
         self.special_users = self.load_special_users()
+        
+        # Define cone tool for AI function calling
+        self.cone_tool = {
+            "type": "function",
+            "function": {
+                "name": "cone_user",
+                "description": "Apply a funny text effect/cone/curse to a user's messages. Use when someone asks to cone, curse, or apply effects to users.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "username": {
+                            "type": "string",
+                            "description": "Username of the person to cone (without @ symbol)"
+                        },
+                        "effect": {
+                            "type": "string",
+                            "enum": ["uwu", "uwufy", "pirate", "arrr", "shakespeare", "bardify", "valley girl", "slayspeak", "genz", "brainrot", "corporate", "scrum master", "caveman", "unga bunga", "drunk", "drunkard", "emojify", "linkedin slop", "question everything", "existential crisis", "overly polite", "canadian", "conspiracy", "vsauce sauce", "british", "bri'ish", "censor", "oni"],
+                            "description": "Type of cone effect to apply"
+                        },
+                        "duration": {
+                            "type": "string",
+                            "default": "5 minutes",
+                            "description": "How long the effect lasts (e.g. '10 minutes', '1 hour', 'permanent')"
+                        },
+                        "condition": {
+                            "type": "string",
+                            "description": "Optional condition for removal (e.g. 'until they say sorry')"
+                        }
+                    },
+                    "required": ["username", "effect"]
+                }
+            }
+        }
 
     def load_special_users(self) -> Dict:
         try:
@@ -350,7 +384,9 @@ class AIHandler:
                 ],
                 "temperature": 1.2,        # Balanced creativity (0.7-0.9 good for character)
                 "top_p": 0.9,             # Focus on coherent responses
-                "max_tokens": 2000
+                "max_tokens": 2000,
+                "tools": [self.cone_tool],  # Always include cone tools for proper understanding
+                "tool_choice": "auto"
             }
 
             print(f"\n=== FINAL REQUEST TO MODEL ===")
@@ -428,7 +464,29 @@ class AIHandler:
                             print("No response choices")
                             return random.choice(ERROR_RESPONSES)
                         
-                        response_text = data['choices'][0]['message']['content']
+                        choice = data['choices'][0]
+                        message = choice['message']
+                        
+                        # Check for tool calls
+                        if message.get('tool_calls'):
+                            print(f"Tool calls detected: {len(message['tool_calls'])}")
+                            tool_results = []
+                            
+                            for tool_call in message['tool_calls']:
+                                if tool_call['function']['name'] == 'cone_user':
+                                    result = await self.handle_cone_tool_call(tool_call, user_state, state_manager)
+                                    tool_results.append(result)
+                            
+                            # If we have tool results, return them
+                            if tool_results:
+                                return tool_results[0]  # Return first tool result for now
+                        
+                        # Handle normal text response
+                        response_text = message.get('content', '')
+                        if not response_text:
+                            print("No response content")
+                            return random.choice(ERROR_RESPONSES)
+                            
                         print(f"Raw response: {response_text}")
                         
                         response_text = self.clean_response(response_text)
@@ -452,6 +510,69 @@ class AIHandler:
             print(f"Error getting chat response: {e}")
             traceback.print_exc()  # Add full traceback for debugging
             return random.choice(ERROR_RESPONSES)
+
+    async def handle_cone_tool_call(self, tool_call: Dict, user_state: Dict, state_manager) -> str:
+        """Handle cone tool call from AI."""
+        try:
+            # Extract function arguments
+            function_args = json.loads(tool_call['function']['arguments'])
+            username = function_args.get('username', '').lower()
+            effect = function_args.get('effect', 'uwu')
+            duration = function_args.get('duration', '5 minutes')
+            condition = function_args.get('condition')
+            
+            print(f"Cone tool call: {username} -> {effect} for {duration}")
+            
+            # Check permissions - only allow users in CONE_PERMISSIONS
+            current_user = user_state.get('username', '').lower()
+            if current_user not in [name.lower() for name in CONE_PERMISSIONS]:
+                return f"Sorry, only {'Lilly' if 'lilly' in CONE_PERMISSIONS else 'authorized users'} can cone people! I have to follow the rules. 😅"
+            
+            # Import cone manager here to avoid circular imports
+            try:
+                from cone_manager import ConeManager
+                cone_manager = ConeManager(state_manager)
+                
+                # Try to find the target user in special users or recent interactions
+                target_user_id = await self._find_user_id(username, state_manager)
+                if not target_user_id:
+                    return f"I couldn't find a user named '{username}'. Make sure they've chatted recently!"
+                
+                # Add the cone
+                success = await cone_manager.add_cone(target_user_id, effect, duration, condition)
+                
+                if success:
+                    # Create webhook for the user (this will be handled by the bot)
+                    condition_text = f" until {condition}" if condition else ""
+                    return f"Hehe! I've coned @{username} with the {effect} effect for {duration}{condition_text}! 😈✨"
+                else:
+                    return f"Oops! Something went wrong trying to cone @{username}. Maybe try again?"
+                    
+            except ImportError as e:
+                print(f"Failed to import cone_manager: {e}")
+                return "The cone system isn't ready yet! Give me a moment to set it up..."
+                
+        except Exception as e:
+            print(f"Error handling cone tool call: {e}")
+            return "Something went wrong with the coning! Maybe the magic isn't working right now..."
+
+    async def _find_user_id(self, username: str, state_manager) -> Optional[str]:
+        """Find user ID by username from state manager."""
+        try:
+            # Check if state_manager has a method to find users
+            if hasattr(state_manager, 'find_user_by_username'):
+                return await state_manager.find_user_by_username(username)
+            
+            # Fallback: search through user states
+            if hasattr(state_manager, 'user_states'):
+                for user_id, user_data in state_manager.user_states.items():
+                    if user_data.get('username', '').lower() == username.lower():
+                        return user_id
+                        
+            return None
+        except Exception as e:
+            print(f"Error finding user ID for {username}: {e}")
+            return None
 
     async def download_image_to_base64(self, image_url: str) -> str:
         """Download image from Discord CDN and convert to base64 data URL"""

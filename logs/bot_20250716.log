@@ -1,0 +1,229 @@
+2025-07-16 03:57:58,984 - root - INFO - Bot starting in Local mode
+2025-07-16 03:57:58,985 - root - INFO - Initializing AI handler...
+2025-07-16 03:57:58,989 - root - INFO - Initializing state manager...
+2025-07-16 03:57:59,279 - root - INFO - Loading states from MongoDB...
+2025-07-16 03:58:03,307 - root - INFO - States loaded successfully
+2025-07-16 03:58:03,307 - root - INFO - Initializing bots...
+2025-07-16 03:58:03,309 - root - INFO - Starting bots...
+2025-07-16 03:58:03,309 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-16 03:58:03,310 - discord.client - INFO - logging in using static token
+2025-07-16 03:58:04,693 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-16 03:58:04,698 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-16 03:58:09,994 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 47186df7e91331af76c62a7185f8e017).
+2025-07-16 03:59:13,921 - root - INFO - Received signal 2
+2025-07-16 03:59:13,922 - root - INFO - Shutdown requested
+2025-07-16 03:59:13,922 - root - INFO - Initiating graceful shutdown...
+2025-07-16 03:59:13,923 - cone_webhooks - INFO - Cleaning up all cone webhooks...
+2025-07-16 03:59:13,923 - cone_webhooks - INFO - Cleaned up 0 cone webhooks
+2025-07-16 03:59:14,435 - root - INFO - Shutdown complete
+2025-07-16 03:59:17,403 - root - INFO - Bot starting in Local mode
+2025-07-16 03:59:17,404 - root - INFO - Initializing AI handler...
+2025-07-16 03:59:17,407 - root - INFO - Initializing state manager...
+2025-07-16 03:59:17,584 - root - INFO - Loading states from MongoDB...
+2025-07-16 03:59:21,738 - root - INFO - States loaded successfully
+2025-07-16 03:59:21,739 - root - INFO - Initializing bots...
+2025-07-16 03:59:21,741 - root - INFO - Starting bots...
+2025-07-16 03:59:21,741 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-16 03:59:21,742 - discord.client - INFO - logging in using static token
+2025-07-16 03:59:23,127 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-16 03:59:23,131 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-16 03:59:28,094 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 97c419042f43beffedf4a8ed575006fc).
+2025-07-16 04:00:02,964 - root - INFO - Received signal 2
+2025-07-16 04:00:02,964 - root - INFO - Shutdown requested
+2025-07-16 04:00:02,964 - root - INFO - Initiating graceful shutdown...
+2025-07-16 04:00:02,965 - cone_webhooks - INFO - Cleaning up all cone webhooks...
+2025-07-16 04:00:02,965 - cone_webhooks - INFO - Cleaned up 0 cone webhooks
+2025-07-16 04:00:03,501 - root - INFO - Shutdown complete
+2025-07-16 04:00:21,851 - root - INFO - Bot starting in Local mode
+2025-07-16 04:00:21,852 - root - INFO - Initializing AI handler...
+2025-07-16 04:00:21,855 - root - INFO - Initializing state manager...
+2025-07-16 04:00:22,038 - root - INFO - Loading states from MongoDB...
+2025-07-16 04:00:26,050 - root - INFO - States loaded successfully
+2025-07-16 04:00:26,051 - root - INFO - Initializing bots...
+2025-07-16 04:00:26,052 - root - INFO - Starting bots...
+2025-07-16 04:00:26,052 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-16 04:00:26,053 - discord.client - INFO - logging in using static token
+2025-07-16 04:00:27,476 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-16 04:00:27,481 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-16 04:00:32,581 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: a84e834a14fb9517aaebc90d65ff749f).
+2025-07-16 04:06:00,148 - root - INFO - Received signal 2
+2025-07-16 04:06:00,148 - root - INFO - Shutdown requested
+2025-07-16 04:06:00,149 - root - INFO - Initiating graceful shutdown...
+2025-07-16 04:06:00,149 - cone_webhooks - INFO - Cleaning up all cone webhooks...
+2025-07-16 04:06:00,149 - cone_webhooks - INFO - Cleaned up 0 cone webhooks
+2025-07-16 04:06:02,450 - root - WARNING - Database connection close timed out
+2025-07-16 04:06:02,450 - root - INFO - Shutdown complete
+2025-07-16 04:06:05,377 - root - INFO - Bot starting in Local mode
+2025-07-16 04:06:05,378 - root - INFO - Initializing AI handler...
+2025-07-16 04:06:05,381 - root - INFO - Initializing state manager...
+2025-07-16 04:06:05,555 - root - INFO - Loading states from MongoDB...
+2025-07-16 04:06:09,244 - root - INFO - States loaded successfully
+2025-07-16 04:06:09,245 - root - INFO - Initializing bots...
+2025-07-16 04:06:09,246 - root - INFO - Starting bots...
+2025-07-16 04:06:09,247 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-16 04:06:09,247 - discord.client - INFO - logging in using static token
+2025-07-16 04:06:10,519 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-16 04:06:10,524 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-16 04:06:16,013 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 54c4353db67ba2195abd99531feccbe2).
+2025-07-16 04:07:43,669 - root - INFO - Received signal 2
+2025-07-16 04:07:43,670 - root - INFO - Shutdown requested
+2025-07-16 04:07:43,671 - root - INFO - Initiating graceful shutdown...
+2025-07-16 04:07:43,671 - cone_webhooks - INFO - Cleaning up all cone webhooks...
+2025-07-16 04:07:43,672 - cone_webhooks - INFO - Cleaned up 0 cone webhooks
+2025-07-16 04:07:44,198 - root - INFO - Shutdown complete
+2025-07-16 04:07:46,680 - root - INFO - Bot starting in Local mode
+2025-07-16 04:07:46,681 - root - INFO - Initializing AI handler...
+2025-07-16 04:07:46,684 - root - INFO - Initializing state manager...
+2025-07-16 04:07:46,847 - root - INFO - Loading states from MongoDB...
+2025-07-16 04:07:50,932 - root - INFO - States loaded successfully
+2025-07-16 04:07:50,933 - root - INFO - Initializing bots...
+2025-07-16 04:07:50,934 - root - INFO - Starting bots...
+2025-07-16 04:07:50,935 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-16 04:07:50,935 - discord.client - INFO - logging in using static token
+2025-07-16 04:07:52,263 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-16 04:07:52,270 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-16 04:07:57,445 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 63aea1be14438e2eee0e7875a5de519d).
+2025-07-16 04:09:58,376 - root - INFO - Received signal 2
+2025-07-16 04:09:58,376 - root - INFO - Shutdown requested
+2025-07-16 04:09:58,377 - root - INFO - Initiating graceful shutdown...
+2025-07-16 04:09:58,377 - cone_webhooks - INFO - Cleaning up all cone webhooks...
+2025-07-16 04:09:58,378 - cone_webhooks - INFO - Cleaned up 0 cone webhooks
+2025-07-16 04:09:58,899 - root - INFO - Shutdown complete
+2025-07-16 04:10:01,657 - root - INFO - Bot starting in Local mode
+2025-07-16 04:10:01,658 - root - INFO - Initializing AI handler...
+2025-07-16 04:10:01,662 - root - INFO - Initializing state manager...
+2025-07-16 04:10:02,041 - root - INFO - Loading states from MongoDB...
+2025-07-16 04:10:06,250 - root - INFO - States loaded successfully
+2025-07-16 04:10:06,250 - root - INFO - Initializing bots...
+2025-07-16 04:10:06,251 - root - INFO - Starting bots...
+2025-07-16 04:10:06,252 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-16 04:10:06,252 - discord.client - INFO - logging in using static token
+2025-07-16 04:10:07,629 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-16 04:10:07,637 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-16 04:10:12,676 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 5275c8eae5685a13ce2dc4fc774b6691).
+2025-07-16 04:12:29,350 - root - INFO - Received signal 2
+2025-07-16 04:12:29,350 - root - INFO - Shutdown requested
+2025-07-16 04:12:29,351 - root - INFO - Initiating graceful shutdown...
+2025-07-16 04:12:29,351 - cone_webhooks - INFO - Cleaning up all cone webhooks...
+2025-07-16 04:12:29,351 - cone_webhooks - INFO - Cleaned up 0 cone webhooks
+2025-07-16 04:12:29,861 - root - INFO - Shutdown complete
