@@ -18,13 +18,254 @@ try:
         ERROR_RESPONSES,
         CHAT_MODEL,
         VISION_MODEL,
-        SUMMARY_MODEL
+        SUMMARY_MODEL,
+        CONE_PERMISSIONS
     )
 except Exception as e:
     print(f"Config Error: {e}")
     raise
 
 import random
+import re
+import time
+import re
+from datetime import datetime, timedelta
+
+# Import advanced transformations
+try:
+    from advanced_transformations import get_advanced_transformer
+    ADVANCED_TRANSFORMATIONS_AVAILABLE = True
+except ImportError:
+    print("Advanced transformations not available, using basic fallback")
+    ADVANCED_TRANSFORMATIONS_AVAILABLE = False
+
+# Cone Text Transformation Functions
+def transform_uwufy(text):
+    """Transform text to uwu speak."""
+    replacements = {
+        'r': 'w', 'R': 'W', 'l': 'w', 'L': 'W',
+        'no': 'nyo', 'No': 'Nyo', 'NO': 'NYO',
+        'yes': 'yesh', 'Yes': 'Yesh', 'YES': 'YESH'
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    # Add uwu expressions
+    endings = [' uwu', ' owo', ' >w<', ' (◕‿◕)', ' ♪(´▽｀)']
+    text += random.choice(endings)
+    return text
+
+def transform_pirate(text):
+    """Transform text to pirate speak."""
+    replacements = {
+        'you': 'ye', 'your': 'yer', 'You': 'Ye', 'Your': 'Yer',
+        'my': 'me', 'My': 'Me', 'is': 'be', 'are': 'be',
+        'yes': 'aye', 'Yes': 'Aye', 'hello': 'ahoy',
+        'Hello': 'Ahoy', 'for': 'fer', 'over': 'o\'er'
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    endings = [' arrr!', ' ye scurvy dog!', ' shiver me timbers!', ' ahoy matey!']
+    text += random.choice(endings)
+    return text
+
+def transform_shakespeare(text):
+    """Transform text to Shakespearean/bardic speak."""
+    replacements = {
+        'you': 'thou', 'your': 'thy', 'You': 'Thou', 'Your': 'Thy',
+        'are': 'art', 'is': 'ist', 'it': '\'tis',
+        'yes': 'verily', 'no': 'nay', 'because': 'for'
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    endings = [' good sir!', ' fair maiden!', ' thou art wise!', ' verily!']
+    text += random.choice(endings)
+    return text
+
+def transform_valley(text):
+    """Transform text to valley girl speak."""
+    text = text.replace('.', ', like,')
+    endings = [' totally!', ' like, for sure!', ' OMG!', ' so fetch!', ' literally!']
+    text += random.choice(endings)
+    return text
+
+def transform_genz(text):
+    """Transform text to Gen Z/brainrot speak."""
+    replacements = {
+        'good': 'bussin', 'cool': 'fire', 'bad': 'mid',
+        'great': 'no cap', 'really': 'fr fr', 'seriously': 'deadass'
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    endings = [' periodt!', ' no cap!', ' it\'s giving main character energy!', ' slay!']
+    text += random.choice(endings)
+    return text
+
+def transform_corporate(text):
+    """Transform text to corporate speak."""
+    text = "As per our previous discussion, " + text
+    endings = [' Let\'s circle back on this.', ' I\'ll ping you offline.', ' Moving forward...']
+    text += random.choice(endings)
+    return text
+
+def transform_caveman(text):
+    """Transform text to caveman speak."""
+    text = text.replace('I', 'Me').replace(' am ', ' ').replace(' is ', ' ')
+    text = ' '.join(word for word in text.split() if len(word) <= 6)  # Short words only
+    endings = [' Me hungry!', ' Fire good!', ' Ooga booga!']
+    text += random.choice(endings)
+    return text
+
+def transform_drunk(text):
+    """Transform text to drunk speak."""
+    text = text.replace('s', 'sh').replace('S', 'Sh')
+    words = text.split()
+    # Randomly repeat some words
+    for i in range(len(words)):
+        if random.random() < 0.3:
+            words[i] = words[i] + words[i][:2]
+    
+    endings = [' *hic*', ' *burp*', ' I\'m not drunk!', ' *stumbles*']
+    text = ' '.join(words) + random.choice(endings)
+    return text
+
+def transform_emoji(text):
+    """Transform text to emoji-heavy LinkedIn-style."""
+    text = f"🔥 {text} 💯"
+    words = text.split()
+    emojis = ['🚀', '💪', '✨', '🎯', '💡', '⭐', '🏆', '💼']
+    
+    # Add random emojis
+    for i in range(min(3, len(words))):
+        pos = random.randint(0, len(words))
+        words.insert(pos, random.choice(emojis))
+    
+    return ' '.join(words)
+
+def transform_existential(text):
+    """Transform text to existential crisis mode."""
+    text = f"But what is the meaning of '{text}'? Are we just... existing?"
+    endings = [' Nothing matters anyway.', ' We\'re all just stardust.', ' Why do we even try?']
+    text += random.choice(endings)
+    return text
+
+def transform_polite(text):
+    """Transform text to overly polite/Canadian."""
+    text = f"Oh, I\'m terribly sorry, but {text.lower()}"
+    endings = [' if that\'s okay with you?', ' I hope that\'s alright, eh?', ' sorry for bothering you!']
+    text += random.choice(endings)
+    return text
+
+def transform_conspiracy(text):
+    """Transform text to conspiracy theory style."""
+    text = f"Wake up sheeple! {text} But that\'s what THEY want you to think..."
+    endings = [' Connect the dots!', ' Follow the money!', ' The truth is out there!']
+    text += random.choice(endings)
+    return text
+
+def transform_british(text):
+    """Transform text to British slang."""
+    replacements = {
+        'cool': 'brilliant', 'awesome': 'bloody brilliant', 'crazy': 'mental',
+        'food': 'nosh', 'money': 'quid', 'bathroom': 'loo'
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    endings = [' innit?', ' cheers mate!', ' blimey!', ' right proper!']
+    text += random.choice(endings)
+    return text
+
+def transform_censor(text):
+    """Transform text with excessive censoring."""
+    words = text.split()
+    for i, word in enumerate(words):
+        if len(word) > 3 and random.random() < 0.4:
+            words[i] = word[0] + '||' * (len(word) - 2) + word[-1]
+    
+    endings = [' [REDACTED]', ' [CENSORED]', ' ████████']
+    text = ' '.join(words) + random.choice(endings)
+    return text
+
+# Map effect names to transformation functions
+CONE_EFFECTS = {
+    'uwu': transform_uwufy,
+    'pirate': transform_pirate,
+    'shakespeare': transform_shakespeare,
+    'bardify': transform_shakespeare,  # Alias
+    'valley': transform_valley,
+    'slayspeak': transform_valley,  # Alias
+    'genz': transform_genz,
+    'brainrot': transform_genz,  # Alias
+    'corporate': transform_corporate,
+    'scrum': transform_corporate,  # Alias
+    'caveman': transform_caveman,
+    'unga': transform_caveman,  # Alias
+    'drunk': transform_drunk,
+    'drunkard': transform_drunk,  # Alias
+    'emoji': transform_emoji,
+    'linkedin': transform_emoji,  # Alias
+    'existential': transform_existential,
+    'crisis': transform_existential,  # Alias
+    'polite': transform_polite,
+    'canadian': transform_polite,  # Alias
+    'conspiracy': transform_conspiracy,
+    'vsauce': transform_conspiracy,  # Alias
+    'british': transform_british,
+    'bri': transform_british,  # Alias
+    'censor': transform_censor,
+    'oni': transform_censor,  # Alias
+}
+
+def apply_cone_effect(text: str, effect_name: str) -> str:
+    """Apply cone effect using advanced transformations if available, fallback to basic."""
+    # Try advanced transformation first
+    if ADVANCED_TRANSFORMATIONS_AVAILABLE:
+        advanced_transformer = get_advanced_transformer(effect_name)
+        if advanced_transformer:
+            try:
+                return advanced_transformer.cached_transform(text)
+            except Exception as e:
+                print(f"Advanced transformation failed for {effect_name}: {e}")
+                # Fall through to basic transformation
+    
+    # Use basic transformation
+    effect_func = CONE_EFFECTS.get(effect_name.lower())
+    if effect_func:
+        return effect_func(text)
+    
+    return text
+
+def extract_tool_call(response: str) -> dict:
+    """Extract tool call from AI response using regex."""
+    
+    # Look for JSON code blocks
+    json_pattern = r'```json\s*(\{.*?\})\s*```'
+    match = re.search(json_pattern, response, re.DOTALL)
+    
+    if match:
+        try:
+            tool_data = json.loads(match.group(1))
+            if tool_data.get('action') in ['cone_user', 'uncone_user']:
+                return tool_data
+        except json.JSONDecodeError:
+            pass
+    
+    # Alternative: look for inline JSON (without code blocks)
+    json_pattern = r'\{[^}]*"action"[^}]*"(?:cone_user|uncone_user)"[^}]*\}'
+    match = re.search(json_pattern, response)
+    
+    if match:
+        try:
+            tool_data = json.loads(match.group(0))
+            return tool_data
+        except json.JSONDecodeError:
+            pass
+    
+    return None
 
 SUMMARY_UPDATE_PROMPT = """
 [CURRENT STATE]
@@ -107,6 +348,506 @@ class AIHandler:
         except Exception as e:
             print(f"Unexpected error loading special users: {type(e).__name__}: {e}")
             return {}
+
+    def parse_duration(self, duration_str: str) -> int:
+        """Parse duration string into seconds. Returns 0 for permanent cone."""
+        if not duration_str or duration_str.lower() in ['permanent', 'forever', 'indefinite']:
+            return 0
+        
+        # Extract number and unit
+        import re
+        match = re.search(r'(\d+)\s*(second|minute|hour|day|week)s?', duration_str.lower())
+        if not match:
+            return 0
+        
+        number = int(match.group(1))
+        unit = match.group(2)
+        
+        multipliers = {
+            'second': 1,
+            'minute': 60,
+            'hour': 3600,
+            'day': 86400,
+            'week': 604800
+        }
+        
+        return number * multipliers.get(unit, 0)
+
+    def parse_condition(self, condition_str: str) -> dict:
+        """Parse condition string into condition data."""
+        if not condition_str:
+            return None
+        
+        condition_str = condition_str.lower().strip()
+        
+        # Check for common condition patterns
+        if 'say sorry' in condition_str or 'apologize' in condition_str:
+            return {'type': 'say_word', 'word': 'sorry', 'variants': ['sorry', 'apologize', 'apologies']}
+        elif 'say please' in condition_str:
+            return {'type': 'say_word', 'word': 'please', 'variants': ['please']}
+        elif 'say' in condition_str:
+            # Extract the word they need to say
+            words = condition_str.replace('until they say', '').replace('say', '').strip().strip('"\'')
+            if words:
+                return {'type': 'say_word', 'word': words, 'variants': [words]}
+        
+        return None
+
+    def check_condition_met(self, cone_data: dict, message_content: str) -> bool:
+        """Check if a cone condition has been met."""
+        condition = cone_data.get('condition')
+        if not condition:
+            return False
+        
+        if condition['type'] == 'say_word':
+            message_lower = message_content.lower()
+            return any(variant in message_lower for variant in condition['variants'])
+        
+        return False
+
+    def apply_cone_effect(self, text: str, effect: str) -> str:
+        """Apply a cone effect to text using advanced transformations."""
+        # Use the global apply_cone_effect function that handles both advanced and basic transformations
+        return apply_cone_effect(text, effect)
+
+    def handle_cone_command(self, tool_call: dict, requesting_user: str, state_manager) -> str:
+        """Handle a cone command from the AI."""
+        try:
+            action = tool_call.get('action')
+            username = tool_call.get('username', '').strip()
+            
+            # Check permissions
+            if requesting_user.lower() not in [p.lower() for p in CONE_PERMISSIONS]:
+                return f"Sorry {requesting_user}, you don't have permission to use cone commands."
+            
+            # Parse username - handle Discord mentions
+            target_discord_id = self.parse_username_to_discord_id(username, state_manager)
+            if not target_discord_id:
+                # For Discord mentions, extract ID directly without database check
+                mention_match = re.match(r'<@!?(\d+)>', username.strip())
+                if mention_match:
+                    target_discord_id = mention_match.group(1)
+                    print(f"Using Discord ID from mention: {target_discord_id}")
+                else:
+                    return f"❌ Could not find user '{username}' in the system."
+            
+            # Get display name for responses
+            display_name = self.get_display_name_for_discord_id(target_discord_id, state_manager)
+            if not display_name:
+                # If user not in database, use a fallback name
+                display_name = f"User{target_discord_id}" if target_discord_id.isdigit() else username
+            
+            # Handle uncone
+            if action == 'uncone_user':
+                return self.handle_uncone_command(target_discord_id, requesting_user, state_manager, display_name)
+            
+            # Handle cone
+            effect = tool_call.get('effect', 'uwu').lower()
+            reason = tool_call.get('reason', 'no reason given')
+            duration = tool_call.get('duration', '')
+            condition = tool_call.get('condition', '')
+            
+            # Validate effect
+            if effect not in CONE_EFFECTS:
+                available_effects = list(CONE_EFFECTS.keys())
+                return f"Unknown effect '{effect}'. Available effects: {', '.join(available_effects[:10])}..."
+            
+            # Parse duration and condition
+            duration_seconds = self.parse_duration(duration)
+            condition_data = self.parse_condition(condition)
+            
+            # Store cone data with enhanced features using Discord ID as key
+            if not hasattr(state_manager, 'cone_data'):
+                state_manager.cone_data = {}
+            
+            current_time = time.time()
+            expiry_time = current_time + duration_seconds if duration_seconds > 0 else None
+            
+            # Override existing cone if present
+            old_cone = state_manager.cone_data.get(target_discord_id, {})
+            if old_cone.get('active'):
+                override_msg = f" (overriding previous {old_cone.get('effect', 'unknown')} effect)"
+            else:
+                override_msg = ""
+            
+            state_manager.cone_data[target_discord_id] = {
+                'effect': effect,
+                'active': True,
+                'applied_by': requesting_user,
+                'reason': reason,
+                'timestamp': current_time,
+                'expiry_time': expiry_time,
+                'condition': condition_data,
+                'duration_str': duration or 'permanent',
+                'target_username': display_name  # Store display name for responses
+            }
+            
+            # Format response
+            duration_text = f" for {duration}" if duration else " permanently"
+            condition_text = f" until they {condition}" if condition else ""
+            
+            print(f"✅ Coned {display_name} (ID: {target_discord_id}) with {effect} effect by {requesting_user}{override_msg}")
+            return f"✅ Successfully coned {display_name} with {effect} effect{duration_text}{condition_text}! Reason: {reason}{override_msg}"
+            
+        except Exception as e:
+            print(f"Error handling cone command: {e}")
+            traceback.print_exc()
+            return "❌ Failed to apply cone effect."
+
+    def parse_username_to_discord_id(self, username: str, state_manager) -> str:
+        """Parse username/mention to Discord ID. Handles Discord mentions and usernames."""
+        try:
+            username = username.strip()
+            
+            # Check if it's a Discord mention: <@123456789> or <@!123456789>
+            mention_match = re.match(r'<@!?(\d+)>', username)
+            if mention_match:
+                discord_id = mention_match.group(1)
+                print(f"Parsed Discord mention: {username} -> {discord_id}")
+                
+                # Verify this Discord ID exists in our system
+                if self.discord_id_exists(discord_id, state_manager):
+                    return discord_id
+                else:
+                    print(f"Discord ID {discord_id} not found in system")
+                    return None
+            
+            # Not a mention, try to find Discord ID by username
+            return self.find_user_discord_id(username, state_manager)
+            
+        except Exception as e:
+            print(f"Error parsing username to Discord ID: {e}")
+            return None
+
+    def discord_id_exists(self, discord_id: str, state_manager) -> bool:
+        """Check if a Discord ID exists in the system."""
+        try:
+            print(f"DEBUG: Looking for Discord ID '{discord_id}'")
+            print(f"DEBUG: Available users: {list(state_manager.users.keys())}")
+            
+            for platform_key, user_state in state_manager.users.items():
+                print(f"DEBUG: Checking user {platform_key}")
+                if 'discord' in user_state.identifiers:
+                    stored_id = user_state.identifiers['discord']['user_id']
+                    print(f"DEBUG: Stored Discord ID: '{stored_id}' vs looking for: '{discord_id}'")
+                    if stored_id == discord_id:
+                        print(f"DEBUG: MATCH FOUND!")
+                        return True
+                else:
+                    print(f"DEBUG: User {platform_key} has no Discord identifier")
+            
+            print(f"DEBUG: No match found for Discord ID '{discord_id}'")
+            return False
+        except Exception as e:
+            print(f"Error checking Discord ID existence: {e}")
+            return False
+
+    def get_display_name_for_discord_id(self, discord_id: str, state_manager) -> str:
+        """Get display name for a Discord ID."""
+        try:
+            for platform_key, user_state in state_manager.users.items():
+                if 'discord' in user_state.identifiers:
+                    discord_data = user_state.identifiers['discord']
+                    if discord_data['user_id'] == discord_id:
+                        return discord_data.get('display_name') or discord_data.get('username') or f"User{discord_id}"
+            return f"User{discord_id}"
+        except Exception as e:
+            print(f"Error getting display name for Discord ID: {e}")
+            return f"User{discord_id}"
+
+    def find_user_discord_id(self, username: str, state_manager) -> str:
+        """Find Discord ID for a username. Returns None if not found."""
+        try:
+            username_lower = username.lower()
+            
+            # Check all users in state manager
+            for platform_key, user_state in state_manager.users.items():
+                # Check if this user has Discord identity
+                if 'discord' in user_state.identifiers:
+                    discord_data = user_state.identifiers['discord']
+                    discord_id = discord_data['user_id']
+                    
+                    # Check various name fields
+                    if (discord_data['username'].lower() == username_lower or
+                        (discord_data.get('nickname') and discord_data['nickname'].lower() == username_lower) or
+                        (discord_data.get('display_name') and discord_data['display_name'].lower() == username_lower)):
+                        print(f"Found Discord ID {discord_id} for username {username}")
+                        return discord_id
+            
+            print(f"Could not find Discord ID for username: {username}")
+            return None
+            
+        except Exception as e:
+            print(f"Error finding Discord ID for {username}: {e}")
+            return None
+
+    def handle_uncone_command(self, discord_id: str, requesting_user: str, state_manager, display_name: str) -> str:
+        """Handle an uncone command."""
+        try:
+            if not hasattr(state_manager, 'cone_data'):
+                return f"❌ {display_name} is not currently coned."
+            
+            cone_data = state_manager.cone_data.get(discord_id, {})
+            if not cone_data.get('active'):
+                return f"❌ {display_name} is not currently coned."
+            
+            # Deactivate the cone
+            cone_data['active'] = False
+            cone_data['unconed_by'] = requesting_user
+            cone_data['unconed_at'] = time.time()
+            
+            effect = cone_data.get('effect', 'unknown')
+            print(f"✅ Unconed {display_name} (ID: {discord_id}, was {effect}) by {requesting_user}")
+            return f"✅ Successfully unconed {display_name} (removed {effect} effect)!"
+            
+        except Exception as e:
+            print(f"Error handling uncone command: {e}")
+            return "❌ Failed to uncone user."
+
+    def is_user_coned(self, username: str, state_manager) -> tuple:
+        """Check if a user is currently coned. Returns (is_coned, effect)."""
+        try:
+            if not hasattr(state_manager, 'cone_data'):
+                print(f"DEBUG: No cone_data attribute on state_manager")
+                return False, None
+            
+            print(f"DEBUG: Checking cone status for '{username}'")
+            print(f"DEBUG: Available cone data keys: {list(state_manager.cone_data.keys())}")
+            
+            # Try to find cone data using the identifier directly (for Discord ID lookup)
+            cone_data = state_manager.cone_data.get(username, {})
+            
+            # If not found, try to find Discord ID for username lookup
+            if not cone_data:
+                discord_id = self.find_user_discord_id(username, state_manager)
+                if discord_id:
+                    cone_data = state_manager.cone_data.get(discord_id, {})
+                    print(f"DEBUG: Found cone data via Discord ID lookup: {discord_id}")
+            
+            if not cone_data.get('active', False):
+                print(f"DEBUG: No active cone found for {username}")
+                return False, None
+            
+            current_time = time.time()
+            
+            # Check if cone has expired
+            expiry_time = cone_data.get('expiry_time')
+            if expiry_time and current_time > expiry_time:
+                print(f"DEBUG: Cone for {username} has expired")
+                cone_data['active'] = False
+                cone_data['expired_at'] = current_time
+                return False, None
+            
+            print(f"DEBUG: Found active cone for {username}: {cone_data}")
+            return True, cone_data.get('effect', 'uwu')
+            
+        except Exception as e:
+            print(f"Error checking cone status for {username}: {e}")
+            return False, None
+
+    def check_cone_conditions(self, username: str, message_content: str, state_manager) -> bool:
+        """Check if cone conditions are met and update cone status. Returns True if cone should be removed."""
+        try:
+            if not hasattr(state_manager, 'cone_data'):
+                return False
+            
+            # Try direct lookup first (for Discord ID)
+            cone_data = state_manager.cone_data.get(username, {})
+            
+            # If not found, try Discord ID lookup
+            if not cone_data:
+                discord_id = self.find_user_discord_id(username, state_manager)
+                if discord_id:
+                    cone_data = state_manager.cone_data.get(discord_id, {})
+            
+            if not cone_data.get('active'):
+                return False
+            
+            # Check condition
+            if self.check_condition_met(cone_data, message_content):
+                print(f"DEBUG: Cone condition met for {username}")
+                cone_data['active'] = False
+                cone_data['condition_met_at'] = time.time()
+                return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Error checking cone conditions for {username}: {e}")
+            return False
+
+    def get_cone_status(self, username: str, state_manager) -> dict:
+        """Get detailed cone status for a user."""
+        try:
+            if not hasattr(state_manager, 'cone_data'):
+                return {'active': False, 'message': 'No cone data found'}
+            
+            # Try direct lookup first (for Discord ID)
+            cone_data = state_manager.cone_data.get(username, {})
+            lookup_key = username
+            
+            # If not found, try Discord ID lookup for username
+            if not cone_data:
+                discord_id = self.find_user_discord_id(username, state_manager)
+                if discord_id:
+                    cone_data = state_manager.cone_data.get(discord_id, {})
+                    lookup_key = discord_id
+                    print(f"DEBUG: Found cone data for {username} via Discord ID {discord_id}")
+            
+            if not cone_data:
+                return {'active': False, 'message': f'{username} has never been coned'}
+            
+            # Get display name (prefer stored username, fallback to lookup key)
+            display_name = cone_data.get('target_username', username)
+            
+            if not cone_data.get('active'):
+                # Check why it's not active
+                if 'unconed_by' in cone_data:
+                    return {
+                        'active': False, 
+                        'message': f'{display_name} was unconed by {cone_data["unconed_by"]}'
+                    }
+                elif 'expired_at' in cone_data:
+                    return {
+                        'active': False, 
+                        'message': f'{display_name}\'s cone expired'
+                    }
+                elif 'condition_met_at' in cone_data:
+                    return {
+                        'active': False, 
+                        'message': f'{display_name}\'s cone condition was met'
+                    }
+                else:
+                    return {'active': False, 'message': f'{display_name} is not currently coned'}
+            
+            # Active cone - gather details
+            effect = cone_data.get('effect', 'unknown')
+            applied_by = cone_data.get('applied_by', 'unknown')
+            reason = cone_data.get('reason', 'no reason')
+            duration_str = cone_data.get('duration_str', 'permanent')
+            
+            # Calculate remaining time
+            remaining_text = ""
+            expiry_time = cone_data.get('expiry_time')
+            if expiry_time:
+                remaining_seconds = int(expiry_time - time.time())
+                if remaining_seconds > 0:
+                    if remaining_seconds < 60:
+                        remaining_text = f" ({remaining_seconds}s remaining)"
+                    elif remaining_seconds < 3600:
+                        remaining_text = f" ({remaining_seconds//60}m remaining)"
+                    else:
+                        remaining_text = f" ({remaining_seconds//3600}h remaining)"
+                else:
+                    remaining_text = " (expired)"
+            
+            # Condition text
+            condition_text = ""
+            condition = cone_data.get('condition')
+            if condition and condition['type'] == 'say_word':
+                condition_text = f" until they say '{condition['word']}'"
+            
+            return {
+                'active': True,
+                'effect': effect,
+                'applied_by': applied_by,
+                'reason': reason,
+                'duration': duration_str,
+                'remaining_text': remaining_text,
+                'condition_text': condition_text,
+                'message': f'{display_name} is coned with {effect} effect by {applied_by} ({duration_str}{remaining_text}{condition_text}). Reason: {reason}'
+            }
+            
+        except Exception as e:
+            print(f"Error getting cone status for {username}: {e}")
+            traceback.print_exc()
+            return {'active': False, 'message': 'Error retrieving cone status'}
+
+    def cone_user(self, discord_id: str, effect: str, duration: str = None, condition: str = None, admin_user: str = "admin", state_manager = None) -> dict:
+        """Convenience function for slash commands to cone a user directly."""
+        try:
+            # For slash commands, bypass user lookup and apply cone directly
+            if not hasattr(state_manager, 'cone_data'):
+                state_manager.cone_data = {}
+            
+            # Validate effect
+            if effect not in CONE_EFFECTS:
+                available_effects = list(CONE_EFFECTS.keys())
+                return {'success': False, 'message': f"Unknown effect '{effect}'. Available effects: {', '.join(available_effects[:10])}..."}
+            
+            # Parse duration
+            duration_seconds = self.parse_duration(duration or '')
+            
+            current_time = time.time()
+            expiry_time = current_time + duration_seconds if duration_seconds > 0 else None
+            
+            # Get display name if user exists in database, otherwise use fallback
+            display_name = self.get_display_name_for_discord_id(discord_id, state_manager)
+            if not display_name:
+                display_name = f"User{discord_id}"
+            
+            # Store cone data directly using Discord ID as key
+            old_cone = state_manager.cone_data.get(discord_id, {})
+            override_msg = f" (overriding previous {old_cone.get('effect', 'unknown')} effect)" if old_cone.get('active') else ""
+            
+            state_manager.cone_data[discord_id] = {
+                'effect': effect,
+                'active': True,
+                'applied_by': admin_user,
+                'reason': 'Applied via slash command',
+                'timestamp': current_time,
+                'expiry_time': expiry_time,
+                'condition': None,
+                'duration_str': duration or 'permanent',
+                'target_username': display_name
+            }
+            
+            # Format response
+            duration_text = f" for {duration}" if duration else " permanently"
+            result_message = f"✅ Successfully coned {display_name} with {effect} effect{duration_text}! Reason: Applied via slash command{override_msg}"
+            
+            # Return in expected format for slash commands
+            if result_message.startswith('✅'):
+                return {'success': True, 'message': result_message}
+            else:
+                return {'success': False, 'message': result_message}
+                
+        except Exception as e:
+            print(f"Error in cone_user convenience function: {e}")
+            traceback.print_exc()
+            return {'success': False, 'message': 'Failed to apply cone effect'}
+
+    def uncone_user(self, discord_id: str, admin_user: str = "admin", state_manager = None) -> dict:
+        """Convenience function for slash commands to uncone a user directly."""
+        try:
+            # For slash commands, bypass user lookup and uncone directly
+            if not hasattr(state_manager, 'cone_data'):
+                return {'success': False, 'message': 'No cone data found.'}
+            
+            cone_data = state_manager.cone_data.get(discord_id, {})
+            if not cone_data.get('active'):
+                display_name = self.get_display_name_for_discord_id(discord_id, state_manager) or f"User{discord_id}"
+                return {'success': False, 'message': f"❌ {display_name} is not currently coned."}
+            
+            # Deactivate the cone
+            cone_data['active'] = False
+            cone_data['unconed_by'] = admin_user
+            cone_data['unconed_at'] = time.time()
+            
+            effect = cone_data.get('effect', 'unknown')
+            display_name = cone_data.get('target_username') or self.get_display_name_for_discord_id(discord_id, state_manager) or f"User{discord_id}"
+            result_message = f"✅ Successfully unconed {display_name} (removed {effect} effect)!"
+            
+            # Return in expected format for slash commands
+            if result_message.startswith('✅'):
+                return {'success': True, 'message': result_message}
+            else:
+                return {'success': False, 'message': result_message}
+                
+        except Exception as e:
+            print(f"Error in uncone_user convenience function: {e}")
+            traceback.print_exc()
+            return {'success': False, 'message': 'Failed to remove cone effect'}
 
     def extract_usernames(self, message: str) -> List[str]:
         """Extract usernames from message with variant matching"""
@@ -269,7 +1010,50 @@ class AIHandler:
             # Build system messages
             system_messages = [
                 {"role": "system", "content": BOT_PERSONA},
-                {"role": "system", "content": "CRITICAL: Never acknowledge being an AI or break character. Always respond as Ghost, the teenage dragon."}
+                {"role": "system", "content": "CRITICAL: Never acknowledge being an AI or break character. Always respond as Ghost, the teenage dragon."},
+                {"role": "system", "content": f"""CONE SYSTEM: You have access to cone tools that can apply text effects to users with advanced features.
+
+IMPORTANT: When someone asks you to cone or uncone a user, respond with this EXACT format:
+
+FOR CONING:
+```json
+{{
+    "action": "cone_user",
+    "username": "target_user_identifier",
+    "effect": "effect_name",
+    "reason": "brief reason",
+    "duration": "optional_duration",
+    "condition": "optional_condition"
+}}
+```
+
+FOR UNCONING:
+```json
+{{
+    "action": "uncone_user",
+    "username": "target_user_identifier"
+}}
+```
+
+CRITICAL: For the "username" field, use EXACTLY what the user provided:
+- If they mention someone like "@username" or "username", use that
+- If they use a Discord mention like "<@123456789>", use that EXACT string
+- DO NOT modify or reject Discord mentions - pass them through exactly as given
+
+Available effects: uwu, pirate, shakespeare, bardify, valley, slayspeak, genz, brainrot, corporate, scrum, caveman, unga, drunk, drunkard, emoji, linkedin, existential, crisis, polite, canadian, conspiracy, vsauce, british, bri, censor, oni
+
+Duration examples: "10 minutes", "1 hour", "2 days", "permanent" (default)
+Condition examples: "until they say sorry", "until they apologize", "until they say please"
+
+Features:
+- Timed cones: automatically expire after duration
+- Conditional cones: removed when condition is met
+- Override: coning someone already coned replaces the previous cone
+- Uncone: removes any active cone effect
+
+Only {', '.join(CONE_PERMISSIONS)} can use coning commands.
+
+For normal conversation, just respond normally without the JSON format."""}
             ]
             
             # Add platform-specific constraints
@@ -430,6 +1214,17 @@ class AIHandler:
                         
                         response_text = data['choices'][0]['message']['content']
                         print(f"Raw response: {response_text}")
+                        
+                        # Check for simulated tool calls
+                        tool_call = extract_tool_call(response_text)
+                        if tool_call:
+                            print(f"Detected tool call: {tool_call}")
+                            requesting_user = user_state.get('username', 'unknown')
+                            
+                            # Handle the cone command
+                            result = self.handle_cone_command(tool_call, requesting_user, state_manager)
+                            print(f"Tool execution result: {result}")
+                            return result
                         
                         response_text = self.clean_response(response_text)
                         print(f"Cleaned response: {response_text}")

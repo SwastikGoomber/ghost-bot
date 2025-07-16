@@ -49,11 +49,22 @@ test_*.py
 .DS_Store
 Thumbs.db
 
-# Local testing
+# Local testing and debugging
 test_*.py
 test_*.json
 temp_*.txt
+check_*.py
+debug_*.py
+*_debug.py
 
+# NLP model downloads (large files)
+*.model
+*.bin
+en_core_web_*
+
+# Backup files from migration/purge operations  
+*.json.bak
+states_backup_*.json
 
 #misc
 TODO.md

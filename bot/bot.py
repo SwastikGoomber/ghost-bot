@@ -148,6 +148,129 @@ class CustomBot(commands.Bot):
                 except Exception as e2:
                     print(f"Failed to send error message: {e2}")
 
+        @self.tree.command(
+            name="cone_status",
+            description="Check cone status for yourself or another user"
+        )
+        async def cone_status(interaction: discord.Interaction, username: Optional[str] = None):
+            try:
+                target_username = username or interaction.user.name
+                
+                # Try different identifiers for the target user
+                if username:
+                    # Looking up another user
+                    target_identifiers = [username.lower()]
+                else:
+                    # Looking up self
+                    target_identifiers = [
+                        str(interaction.user.id),
+                        interaction.user.name.lower(),
+                        interaction.user.display_name.lower()
+                    ]
+                    if interaction.user.global_name:
+                        target_identifiers.append(interaction.user.global_name.lower())
+                
+                # Check cone status
+                status_found = False
+                for identifier in target_identifiers:
+                    if identifier:
+                        status = self.ai_handler.get_cone_status(identifier, self.state_manager)
+                        if status['message'] != f'{identifier} has never been coned':
+                            await interaction.response.send_message(
+                                f"**Cone Status for {target_username}:**\n{status['message']}"
+                            )
+                            status_found = True
+                            break
+                
+                if not status_found:
+                    await interaction.response.send_message(f"{target_username} has never been coned.")
+                    
+            except Exception as e:
+                print(f"Error in cone_status: {e}")
+                traceback.print_exc()
+                try:
+                    await interaction.response.send_message("Failed to check cone status.")
+                except:
+                    pass
+
+        # TEMPORARY: Cone commands for testing expanded vocabulary
+        @self.tree.command(
+            name="cone",
+            description="[TEMP] Apply a cone effect to a user (Testing expanded vocabulary)"
+        )
+        async def cone_user(
+            interaction: discord.Interaction,
+            user: discord.Member,
+            effect: str = "shakespeare",
+            duration: Optional[str] = None,
+            condition: Optional[str] = None
+        ):
+            try:
+                # Check permissions (only for bot owner/authorized users)
+                authorized_user_ids = [533342015660883968]  # Replace with your Discord ID
+                if interaction.user.id not in authorized_user_ids:
+                    await interaction.response.send_message("❌ You don't have permission to use cone commands.", ephemeral=True)
+                    return
+                
+                # Validate effect
+                valid_effects = ['uwu', 'pirate', 'shakespeare', 'bardify', 'valley', 'slayspeak', 'genz', 
+                               'brainrot', 'corporate', 'scrum', 'caveman', 'unga', 'drunk', 'drunkard', 
+                               'emoji', 'linkedin', 'existential', 'crisis', 'polite', 'canadian', 
+                               'conspiracy', 'vsauce', 'british', 'bri', 'censor', 'oni']
+                
+                if effect.lower() not in valid_effects:
+                    await interaction.response.send_message(f"❌ Invalid effect. Available: {', '.join(valid_effects)}", ephemeral=True)
+                    return
+                
+                # Apply cone using the existing AI handler function
+                result = self.ai_handler.cone_user(
+                    str(user.id),  # Use Discord ID as identifier
+                    effect.lower(),
+                    duration=duration,
+                    condition=condition,
+                    admin_user=interaction.user.name,
+                    state_manager=self.state_manager
+                )
+                
+                if result['success']:
+                    await interaction.response.send_message(f"✅ {result['message']}")
+                else:
+                    await interaction.response.send_message(f"❌ {result['message']}")
+                    
+            except Exception as e:
+                print(f"Error in cone command: {e}")
+                traceback.print_exc()
+                await interaction.response.send_message("❌ Failed to apply cone effect.", ephemeral=True)
+
+        @self.tree.command(
+            name="uncone",
+            description="[TEMP] Remove cone effect from a user"
+        )
+        async def uncone_user(interaction: discord.Interaction, user: discord.Member):
+            try:
+                # Check permissions (only for bot owner/authorized users)
+                authorized_user_ids = [533342015660883968]  # Replace with your Discord ID
+                if interaction.user.id not in authorized_user_ids:
+                    await interaction.response.send_message("❌ You don't have permission to use cone commands.", ephemeral=True)
+                    return
+                
+                # Remove cone using the existing AI handler function
+                result = self.ai_handler.uncone_user(
+                    str(user.id),  # Use Discord ID as identifier
+                    admin_user=interaction.user.name,
+                    state_manager=self.state_manager
+                )
+                
+                if result['success']:
+                    await interaction.response.send_message(f"✅ {result['message']}")
+                else:
+                    await interaction.response.send_message(f"❌ {result['message']}")
+                    
+            except Exception as e:
+                print(f"Error in uncone command: {e}")
+                traceback.print_exc()
+                await interaction.response.send_message("❌ Failed to remove cone effect.", ephemeral=True)
+
         # Sync commands
         print("\n=== Syncing Discord Commands ===")
         try:
@@ -202,6 +325,71 @@ class CustomBot(commands.Bot):
                 contains_name
             )
 
+            # Check if the user is coned BEFORE the should_respond check
+            # This needs to happen for ALL messages, not just ones that trigger Ghost
+            # ONLY use Discord ID for cone checking to avoid confusion with nicknames/display names
+            user_discord_id = str(message.author.id)
+            
+            print(f"DEBUG: Checking cone status for Discord ID: {user_discord_id}")
+            
+            is_coned, effect = self.ai_handler.is_user_coned(user_discord_id, self.state_manager)
+            if is_coned:
+                print(f"DEBUG: Found cone for Discord ID '{user_discord_id}' with effect '{effect}'")
+            
+            # Store original message for potential reply before deletion
+            original_message = message
+            message_was_deleted = False
+            
+            # Handle coned user message replacement
+            if is_coned:
+                print(f"User {message.author.name} is coned with {effect} effect")
+                
+                # Check if cone condition is met (before transforming message)
+                condition_met = self.ai_handler.check_cone_conditions(
+                    str(message.author.id), message.content, self.state_manager
+                )
+                
+                if condition_met:
+                    print(f"Cone condition met for {message.author.name} - removing cone")
+                    # Send a notification that the cone was removed
+                    await message.channel.send(f"🎉 {message.author.mention} has met their cone condition and is now free!")
+                    # Don't transform this message since they're now unconed
+                    is_coned = False
+                
+                if is_coned:  # Still coned after condition check
+                    # Delete the original message
+                    try:
+                        await message.delete()
+                        message_was_deleted = True
+                        print(f"Deleted original message from coned user {message.author.name}")
+                    except discord.NotFound:
+                        print("Message was already deleted")
+                    except discord.Forbidden:
+                        print("No permission to delete message")
+                    except Exception as e:
+                        print(f"Error deleting message: {e}")
+                    
+                    # Transform the message content
+                    transformed_content = self.ai_handler.apply_cone_effect(message.content, effect)
+                    
+                    # Send transformed message using webhook to mimic the user
+                    try:
+                        webhook = await self.get_or_create_webhook(message.channel)
+                        await webhook.send(
+                            content=transformed_content,
+                            username=message.author.display_name,
+                            avatar_url=message.author.avatar.url if message.author.avatar else None
+                        )
+                        print(f"Sent transformed message: {transformed_content}")
+                    except Exception as e:
+                        print(f"Error sending webhook message: {e}")
+                        # Fallback: just log the error
+                    
+                    # Don't continue processing if this was just a cone transformation
+                    # Unless the message also triggers Ghost to respond
+                    if not should_respond:
+                        return
+
             if should_respond:
                 try:
                     user_state, link_msg = await self.state_manager.get_user_state(
@@ -212,14 +400,14 @@ class CustomBot(commands.Bot):
                     )
 
                     # Check for image attachments
-                    image_urls = self.extract_image_urls(message)
+                    image_urls = self.extract_image_urls(original_message)
                     
                     # Choose appropriate response method based on whether images are present
                     if image_urls:
                         print(f"Processing message with {len(image_urls)} images using vision model")
                         response = await self.ai_handler.get_vision_response(
                             user_state.to_dict(),
-                            current_message=message.content,
+                            current_message=original_message.content,
                             image_urls=image_urls,
                             state_manager=self.state_manager
                         )
@@ -227,7 +415,7 @@ class CustomBot(commands.Bot):
                         # Use regular text model for text-only messages
                         response = await self.ai_handler.get_chat_response(
                             user_state.to_dict(),
-                            current_message=message.content,
+                            current_message=original_message.content,
                             state_manager=self.state_manager
                         )
                     
@@ -236,7 +424,7 @@ class CustomBot(commands.Bot):
                         # Store the conversation pair
                         await self.state_manager.add_message(
                             platform_key,
-                            message.content,
+                            original_message.content,
                             False,
                             message.author.name
                         )
@@ -258,7 +446,11 @@ class CustomBot(commands.Bot):
 
                         await self.state_manager.save_states()
 
-                    await message.reply(response)
+                    # Fix reply issue: if message was deleted due to cone, send regular message instead of reply
+                    if message_was_deleted:
+                        await original_message.channel.send(f"{original_message.author.mention} {response}")
+                    else:
+                        await original_message.reply(response)
                 except Exception as e:
                     print(f"Error processing message: {e}")
                     traceback.print_exc()
@@ -266,6 +458,32 @@ class CustomBot(commands.Bot):
         except Exception as e:
             print(f"Error in on_message: {e}")
             traceback.print_exc()
+
+    async def get_or_create_webhook(self, channel):
+        """Get or create a webhook for the channel."""
+        try:
+            # Check if we already have a webhook for this channel
+            webhooks = await channel.webhooks()
+            ghost_webhook = None
+            
+            for webhook in webhooks:
+                if webhook.name == "Ghost-Cone-System":
+                    ghost_webhook = webhook
+                    break
+            
+            if not ghost_webhook:
+                # Create a new webhook
+                ghost_webhook = await channel.create_webhook(name="Ghost-Cone-System")
+                print(f"Created new webhook for channel {channel.name}")
+            
+            return ghost_webhook
+            
+        except discord.Forbidden:
+            print(f"No permission to manage webhooks in {channel.name}")
+            return None
+        except Exception as e:
+            print(f"Error managing webhook: {e}")
+            return None
 
 def run_bot():
     bot = CustomBot()

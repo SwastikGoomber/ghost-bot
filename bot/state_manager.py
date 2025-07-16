@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple
 import os
 import traceback
 import asyncio
+import time
 
 # Create logs directory if it doesn't exist
 os.makedirs('logs', exist_ok=True)
@@ -144,6 +145,7 @@ class StateManager:
     def __init__(self, ai_handler=None):
         self.users = {}
         self.pending_links = {}
+        self.cone_data = {}  # Add cone data storage
         self.ai_handler = ai_handler
         self._initialized = False  # Track initialization state
         self.db = None
@@ -176,9 +178,11 @@ class StateManager:
             # Don't call async close() in destructor - it should be handled in shutdown
             pass
 
-    async def save_states(self):
+    async def save_states(self, force_save=False):
         """Save all states"""
         try:
+            # Safety check removed - was blocking normal operation after data loss
+                
             data = {}
             processed_users = set()  # Track users we've saved
             
@@ -200,6 +204,10 @@ class StateManager:
             if self.pending_links:
                 data['pending_links'] = self.pending_links
                 
+            # Add cone data if any exist
+            if hasattr(self, 'cone_data') and self.cone_data:
+                data['cone_data'] = self.cone_data
+                
             # Convert datetime objects to ISO format strings
             data = json.loads(json.dumps(data, default=str))
             
@@ -219,6 +227,7 @@ class StateManager:
         print("\n=== Loading states ===")
         self.users = {}
         self.pending_links = {}
+        self.cone_data = {}
 
         # Initialize MongoDB connection if needed
         if self.db is not None:
@@ -240,10 +249,16 @@ class StateManager:
             # Load pending links if any
             self.pending_links = data.get('pending_links', {})
             
+            # Load cone data if any
+            self.cone_data = data.get('cone_data', {})
+            
+            # Clean up old cone data entries - convert username-based keys to Discord IDs
+            self.cleanup_cone_data()
+            
             # First pass: Load and create Discord states
-            discord_states = {}  # Map Discord IDs to states
+            discord_states = {}
             for key, user_data in data.items():
-                if key == 'pending_links':
+                if key in ['pending_links', 'cone_data']:
                     continue
                     
                 if key.startswith('discord_'):
@@ -264,11 +279,11 @@ class StateManager:
                     self.users[key] = user_state
                     discord_states[user_data['user_id']] = user_state
             
-            unique_states = set()  # Track unique UserState objects
+            unique_states = set()
             
             # Second pass: Link Twitch states or create new ones
             for key, user_data in data.items():
-                if key == 'pending_links' or key.startswith('discord_'):
+                if key in ['pending_links', 'cone_data'] or key.startswith('discord_'):
                     continue
                     
                 # Check if this Twitch user should be linked to a Discord account
@@ -300,12 +315,77 @@ class StateManager:
             # Count unique objects by ID
             unique_states = {id(state) for state in self.users.values()}
             print(f"Loaded {len(unique_states)} unique users and {len(self.pending_links)} pending links")
+            
+            # REMOVED DANGEROUS AUTO-SAVE: Never auto-save during load_states()
+            # This was causing database overwrites with partial data!
+            if self.cone_data:
+                print(f"Loaded {len(self.cone_data)} cone entries")
+            
+        except FileNotFoundError as e:
+            print(f"FileNotFoundError: {e}")
+            print("Searching in these locations:")
+            print("\n".join(os.listdir('.')))
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+            self.users = {}
+            self.pending_links = {}
+            self.cone_data = {}
         except Exception as e:
             print(f"Error loading states: {str(e)}")
             traceback.print_exc()
             logging.error(f"Failed to load states: {e}")
             self.users = {}
             self.pending_links = {}
+            self.cone_data = {}
+
+    def cleanup_cone_data(self):
+        """Clean up old cone data entries and convert username-based keys to Discord IDs."""
+        try:
+            if not self.cone_data:
+                return
+            
+            print("Cleaning up cone data...")
+            cleaned_cone_data = {}
+            
+            for key, cone_entry in self.cone_data.items():
+                # Check if key is already a Discord ID (numeric string)
+                if key.isdigit():
+                    # Already a Discord ID, keep as-is
+                    cleaned_cone_data[key] = cone_entry
+                    continue
+                
+                # Try to find Discord ID for this username
+                discord_id = None
+                for platform_key, user_state in self.users.items():
+                    if 'discord' in user_state.identifiers:
+                        discord_data = user_state.identifiers['discord']
+                        if (discord_data['username'].lower() == key.lower() or
+                            (discord_data.get('nickname') and discord_data['nickname'].lower() == key.lower()) or
+                            (discord_data.get('display_name') and discord_data['display_name'].lower() == key.lower())):
+                            discord_id = discord_data['user_id']
+                            break
+                
+                if discord_id:
+                    # Convert to Discord ID key and preserve target username
+                    if 'target_username' not in cone_entry:
+                        cone_entry['target_username'] = key
+                    cleaned_cone_data[discord_id] = cone_entry
+                    print(f"Converted cone entry: {key} -> {discord_id}")
+                else:
+                    # Couldn't find user, mark as expired
+                    print(f"Could not find user for cone entry: {key}, marking as expired")
+                    cone_entry['active'] = False
+                    cone_entry['expired_at'] = time.time()
+                    cone_entry['cleanup_reason'] = 'user_not_found'
+                    cleaned_cone_data[key] = cone_entry
+            
+            # Update cone data
+            self.cone_data = cleaned_cone_data
+            print(f"Cone data cleanup complete: {len(cleaned_cone_data)} entries")
+            
+        except Exception as e:
+            print(f"Error during cone data cleanup: {e}")
+            traceback.print_exc()
 
     async def unlink_accounts(self, platform_key: str) -> bool:
         """Unlink a user's Discord and Twitch accounts"""

@@ -32,9 +32,12 @@ OPENROUTER_CHAT_KEY = os.getenv('OPENROUTER_CHAT_KEY')
 OPENROUTER_SUMMARY_KEY = os.getenv('OPENROUTER_SUMMARY_KEY')
 
 # AI Model Configuration
-CHAT_MODEL = "google/gemma-3-27b-it:free"
-VISION_MODEL = "google/gemma-3-27b-it:free"  # Gemma 3 supports multimodal input
-SUMMARY_MODEL = "tngtech/deepseek-r1t-chimera:free"
+CHAT_MODEL = "google/gemma-3-27b-it:free"  # Confirmed working free model
+VISION_MODEL = "google/gemma-3-27b-it:free"  # Same model, supports multimodal 
+SUMMARY_MODEL = "qwen/qwen3-30b-a3b:free"  # Confirmed working powerful free model
+
+# Cone System Configuration
+CONE_PERMISSIONS = ["lillyyen", "swastikgoomber"]  # Usernames who can cone others
 
 BOT_NAME = "Ghost"
 
