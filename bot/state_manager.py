@@ -181,8 +181,6 @@ class StateManager:
     async def save_states(self, force_save=False):
         """Save all states"""
         try:
-            # Safety check removed - was blocking normal operation after data loss
-                
             data = {}
             processed_users = set()  # Track users we've saved
             
@@ -316,8 +314,6 @@ class StateManager:
             unique_states = {id(state) for state in self.users.values()}
             print(f"Loaded {len(unique_states)} unique users and {len(self.pending_links)} pending links")
             
-            # REMOVED DANGEROUS AUTO-SAVE: Never auto-save during load_states()
-            # This was causing database overwrites with partial data!
             if self.cone_data:
                 print(f"Loaded {len(self.cone_data)} cone entries")
             

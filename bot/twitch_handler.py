@@ -127,26 +127,29 @@ class TwitchBot(commands.Bot):
                 
                 # Only store messages if we got a real response
                 if response not in NON_INTERACTION_RESPONSES:
-                    # Store the conversation pair
-                    await self.state_manager.add_message(
-                        platform_key,
-                        message.content,
-                        False,
-                        message.author.name
-                    )
-                    
-                    await self.state_manager.add_message(
-                        platform_key,
-                        response,
-                        True,
-                        BOT_NAME
-                    )
+                    # Skip tool call responses to prevent pattern learning
+                    if not is_tool_call_response(response):
+                        # Store normal conversation
+                        await self.state_manager.add_message(
+                            platform_key,
+                            message.content,
+                            False,
+                            message.author.name
+                        )
+                        
+                        await self.state_manager.add_message(
+                            platform_key,
+                            response,
+                            True,
+                            BOT_NAME
+                        )
 
-                    # Check summaries only after actual interactions
-                    if user_state.needs_summary_update():
-                        success, msg = await self.state_manager.update_user_state(platform_key)
-                        if not success:
-                            print(f"Summary update failed: {msg}")
+                        # Check summaries only after actual interactions
+                        if user_state.needs_summary_update():
+                            success, msg = await self.state_manager.update_user_state(platform_key)
+                            if not success:
+                                print(f"Summary update failed: {msg}")
+                    # Tool call interactions don't get saved to conversation history
 
                 # Always send response
                 await message.channel.send(f"@{message.author.name} {response}")

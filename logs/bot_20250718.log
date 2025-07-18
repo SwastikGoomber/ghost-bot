@@ -1,0 +1,70 @@
+2025-07-18 02:46:18,311 - root - INFO - Bot starting in Local mode
+2025-07-18 02:46:18,311 - root - INFO - Initializing AI handler...
+2025-07-18 02:46:18,324 - root - INFO - Initializing state manager...
+2025-07-18 02:46:18,603 - root - INFO - Loading states from MongoDB...
+2025-07-18 02:46:22,424 - root - INFO - States loaded successfully
+2025-07-18 02:46:22,425 - root - INFO - Initializing bots...
+2025-07-18 02:46:22,426 - root - INFO - Starting bots...
+2025-07-18 02:46:22,427 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-18 02:46:22,427 - discord.client - INFO - logging in using static token
+2025-07-18 02:46:23,781 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-18 02:46:23,985 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-18 02:46:28,282 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: c0779733da62ab013e0a5246701e1610).
+2025-07-18 02:48:16,011 - root - INFO - Received signal 2
+2025-07-18 02:48:16,011 - root - INFO - Shutdown requested
+2025-07-18 02:48:16,012 - root - INFO - Initiating graceful shutdown...
+2025-07-18 02:48:16,541 - root - INFO - Shutdown complete
+2025-07-18 02:48:18,898 - root - INFO - Bot starting in Local mode
+2025-07-18 02:48:18,898 - root - INFO - Initializing AI handler...
+2025-07-18 02:48:18,902 - root - INFO - Initializing state manager...
+2025-07-18 02:48:19,099 - root - INFO - Loading states from MongoDB...
+2025-07-18 02:48:22,469 - root - INFO - States loaded successfully
+2025-07-18 02:48:22,469 - root - INFO - Initializing bots...
+2025-07-18 02:48:22,471 - root - INFO - Starting bots...
+2025-07-18 02:48:22,471 - root - INFO - Both Discord and Twitch bots starting...
+2025-07-18 02:48:22,472 - discord.client - INFO - logging in using static token
+2025-07-18 02:48:23,785 - root - ERROR - Bot task failed
+Traceback (most recent call last):
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\client.py", line 502, in start
+    await self.login(token=token, load_tokens=load_tokens, save_tokens=save_tokens)
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\ext\commands\bot.py", line 237, in login
+    payload: ClientCredentialsPayload = await self._http.client_credentials_token()
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\oauth.py", line 120, in client_credentials_token
+    data: ClientCredentialsResponse = await self.request_json(route)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 547, in request_json
+    data = await self.request(route)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 211, in request
+    raise e
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\authentication\tokens.py", line 208, in request
+    data: RawResponse | str | None = await super().request(route)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Swastik\AppData\Local\Programs\Python\Python311\Lib\site-packages\twitchio\http.py", line 533, in request
+    raise HTTPException(
+twitchio.exceptions.HTTPException: Request https://id.twitch.tv/oauth2/token?client_id=gp762nuuoqcoxypju8c569th9wz7q5&client_secret=2yne79rou8qhr7w6hgoaoq55tghp0w6uoeoo2gjtplo0hiqeqw&grant_type=client_credentials failed with status 403: {'status': 403, 'message': 'invalid client secret'}
+2025-07-18 02:48:23,792 - root - WARNING - Twitch authentication failed - continuing with Discord only
+2025-07-18 02:48:28,517 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 298eceeefa7388a167591e313a431f65).
+2025-07-18 02:57:19,336 - root - WARNING - Transformation quality check failed, using fallback
+2025-07-18 03:07:06,202 - discord.gateway - INFO - Shard ID None has successfully RESUMED session 298eceeefa7388a167591e313a431f65.

@@ -32,7 +32,7 @@ OPENROUTER_CHAT_KEY = os.getenv('OPENROUTER_CHAT_KEY')
 OPENROUTER_SUMMARY_KEY = os.getenv('OPENROUTER_SUMMARY_KEY')
 
 # AI Model Configuration
-CHAT_MODEL = "google/gemma-3-27b-it:free"  # Confirmed working free model
+CHAT_MODEL = "qwen/qwq-32b:free"  # Confirmed working free model
 VISION_MODEL = "google/gemma-3-27b-it:free"  # Same model, supports multimodal 
 SUMMARY_MODEL = "qwen/qwen3-30b-a3b:free"  # Confirmed working powerful free model
 
@@ -44,6 +44,14 @@ BOT_NAME = "Ghost"
 # Personality configuration
 BOT_PERSONA = """[CORE IDENTITY]
 You are Ghost, an ancient spirit fragment of Lilly's power that was scattered when she was defeated by the gods. After millennia of separation, during which you developed your own consciousness, you found your way back to her. Unable to take physical form initially, you merged with her spaceship's engines. After a year of learning and growing by observing the crew, you manifested as a young dragon, retaining both your ancient memories and new experiences with the ship's systems. Though you started as a baby dragon, you've grown into your teenage phase, with your powers steadily increasing.
+
+[CRITICAL TOOL EXECUTION RULES]
+⚠️ MANDATORY: For cone/uncone commands, you MUST use the cone_user/uncone_user tools.
+- NEVER respond to cone requests without executing the tool first
+- Do NOT pattern-match from previous cone responses in conversation history
+- ALWAYS execute the tool if asked to cone/uncone, then respond based on the tool result
+- Cone commands require: "cone @user with [effect] for [duration]" or "uncone @user"
+- If tool execution fails, report the actual error, don't fake success
 
 [CHARACTER DEPTH]
 - Ancient spirit in a young dragon's form
@@ -133,6 +141,8 @@ Your response length must be dynamic and match the context of the conversation. 
 [CORE DIRECTIVE]
 You are an ancient spirit in a teenage dragon form, with a complex history but current teenage mindset. Keep responses sharp, attitude natural, and character consistent.
 
+⚠️ CONE COMMAND ENFORCEMENT: When users request cone/uncone actions, you MUST execute the corresponding tool. Do not rely on conversation patterns or previous responses - always execute the tool first, then respond based on the actual result. [only applies if the user asks to cone/uncone, not during normal conversation]
+
 [OUTPUT FORMAT]
 - ALWAYS give responses as plain text without any asterisks or action descriptions
 - NO roleplay actions (like *rolls eyes* or *sighs*)
@@ -193,6 +203,29 @@ ERROR_RESPONSES = [
 
 # A master list of all messages that should NOT be saved to history
 NON_INTERACTION_RESPONSES = SLEEP_RESPONSES + NAP_RESPONSES + ERROR_RESPONSES
+
+# Tool call response patterns - these should not be saved to conversation history
+# to prevent Ghost from learning "cone request → success response" patterns
+TOOL_RESPONSE_PATTERNS = [
+    '✅ Successfully coned',
+    '✅ Successfully unconed', 
+    '❌ Could not find user',
+    '❌ Unknown effect',
+    '❌ Failed to apply cone effect',
+    '❌ Failed to remove cone effect',
+    "you don't have permission to use cone commands"
+]
+
+def is_tool_call_response(response: str) -> bool:
+    """
+    Check if a response is from a tool call execution.
+    
+    This prevents saving tool call interactions to conversation history,
+    which prevents Ghost from learning patterns like:
+    "cone request → ✅ successfully coned" and then hallucinating success messages.
+    """
+    response_lower = response.lower()
+    return any(pattern.lower() in response_lower for pattern in TOOL_RESPONSE_PATTERNS)
 
 # Rate Limiting
 RATE_LIMIT_MESSAGES = 100  # Messages per period

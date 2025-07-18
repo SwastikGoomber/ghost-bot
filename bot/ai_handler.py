@@ -85,29 +85,44 @@ def transform_shakespeare(text):
     return text
 
 def transform_valley(text):
-    """Transform text to valley girl speak."""
-    text = text.replace('.', ', like,')
-    endings = [' totally!', ' like, for sure!', ' OMG!', ' so fetch!', ' literally!']
-    text += random.choice(endings)
-    return text
+    """Transform text to valley girl speak using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'slayspeak')
+    except ImportError:
+        # Basic fallback
+        text = text.replace('.', ', like,')
+        endings = [' totally!', ' like, for sure!', ' OMG!', ' so fetch!', ' literally!']
+        text += random.choice(endings)
+        return text
 
 def transform_genz(text):
-    """Transform text to Gen Z/brainrot speak."""
-    replacements = {
-        'good': 'bussin', 'cool': 'fire', 'bad': 'mid',
-        'great': 'no cap', 'really': 'fr fr', 'seriously': 'deadass'
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    
-    endings = [' periodt!', ' no cap!', ' it\'s giving main character energy!', ' slay!']
-    text += random.choice(endings)
-    return text
+    """Transform text to Gen Z/brainrot speak using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'brainrot')
+    except ImportError:
+        # Basic fallback
+        replacements = {
+            'good': 'bussin', 'cool': 'fire', 'bad': 'mid',
+            'great': 'no cap', 'really': 'fr fr', 'seriously': 'deadass'
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        
+        endings = [' periodt!', ' no cap!', ' it\'s giving main character energy!', ' slay!']
+        text += random.choice(endings)
+        return text
 
 def transform_corporate(text):
-    """Transform text to corporate speak."""
-    text = "As per our previous discussion, " + text
-    endings = [' Let\'s circle back on this.', ' I\'ll ping you offline.', ' Moving forward...']
+    """Transform text to corporate speak using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'scrum')
+    except ImportError:
+        # Basic fallback
+        text = "As per our previous discussion, " + text
+        endings = [' Let\'s circle back on this.', ' I\'ll ping you offline.', ' Moving forward...']
     text += random.choice(endings)
     return text
 
@@ -133,62 +148,92 @@ def transform_drunk(text):
     return text
 
 def transform_emoji(text):
-    """Transform text to emoji-heavy LinkedIn-style."""
-    text = f"🔥 {text} 💯"
-    words = text.split()
-    emojis = ['🚀', '💪', '✨', '🎯', '💡', '⭐', '🏆', '💼']
-    
-    # Add random emojis
-    for i in range(min(3, len(words))):
-        pos = random.randint(0, len(words))
-        words.insert(pos, random.choice(emojis))
-    
-    return ' '.join(words)
+    """Transform text to emoji-heavy LinkedIn-style using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'linkedin')
+    except ImportError:
+        # Basic fallback
+        text = f"🔥 {text} 💯"
+        words = text.split()
+        emojis = ['🚀', '💪', '✨', '🎯', '💡', '⭐', '🏆', '💼']
+        
+        # Add random emojis
+        for i in range(min(3, len(words))):
+            pos = random.randint(0, len(words))
+            words.insert(pos, random.choice(emojis))
+        
+        return ' '.join(words)
 
 def transform_existential(text):
-    """Transform text to existential crisis mode."""
-    text = f"But what is the meaning of '{text}'? Are we just... existing?"
-    endings = [' Nothing matters anyway.', ' We\'re all just stardust.', ' Why do we even try?']
-    text += random.choice(endings)
-    return text
+    """Transform text to existential crisis mode using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'crisis')
+    except ImportError:
+        # Basic fallback
+        text = f"But what is the meaning of '{text}'? Are we just... existing?"
+        endings = [' Nothing matters anyway.', ' We\'re all just stardust.', ' Why do we even try?']
+        text += random.choice(endings)
+        return text
 
 def transform_polite(text):
-    """Transform text to overly polite/Canadian."""
-    text = f"Oh, I\'m terribly sorry, but {text.lower()}"
-    endings = [' if that\'s okay with you?', ' I hope that\'s alright, eh?', ' sorry for bothering you!']
-    text += random.choice(endings)
-    return text
+    """Transform text to overly polite/Canadian using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'canadian')
+    except ImportError:
+        # Basic fallback
+        text = f"Oh, I\'m terribly sorry, but {text.lower()}"
+        endings = [' if that\'s okay with you?', ' I hope that\'s alright, eh?', ' sorry for bothering you!']
+        text += random.choice(endings)
+        return text
 
 def transform_conspiracy(text):
-    """Transform text to conspiracy theory style."""
-    text = f"Wake up sheeple! {text} But that\'s what THEY want you to think..."
-    endings = [' Connect the dots!', ' Follow the money!', ' The truth is out there!']
-    text += random.choice(endings)
-    return text
+    """Transform text to conspiracy theory style using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'vsauce')
+    except ImportError:
+        # Basic fallback
+        text = f"Wake up sheeple! {text} But that\'s what THEY want you to think..."
+        endings = [' Connect the dots!', ' Follow the money!', ' The truth is out there!']
+        text += random.choice(endings)
+        return text
 
 def transform_british(text):
-    """Transform text to British slang."""
-    replacements = {
-        'cool': 'brilliant', 'awesome': 'bloody brilliant', 'crazy': 'mental',
-        'food': 'nosh', 'money': 'quid', 'bathroom': 'loo'
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    
-    endings = [' innit?', ' cheers mate!', ' blimey!', ' right proper!']
-    text += random.choice(endings)
-    return text
+    """Transform text to British slang using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'british')
+    except ImportError:
+        # Basic fallback
+        replacements = {
+            'cool': 'brilliant', 'awesome': 'bloody brilliant', 'crazy': 'mental',
+            'food': 'nosh', 'money': 'quid', 'bathroom': 'loo'
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        
+        endings = [' innit?', ' cheers mate!', ' blimey!', ' right proper!']
+        text += random.choice(endings)
+        return text
 
 def transform_censor(text):
-    """Transform text with excessive censoring."""
-    words = text.split()
-    for i, word in enumerate(words):
-        if len(word) > 3 and random.random() < 0.4:
-            words[i] = word[0] + '||' * (len(word) - 2) + word[-1]
-    
-    endings = [' [REDACTED]', ' [CENSORED]', ' ████████']
-    text = ' '.join(words) + random.choice(endings)
-    return text
+    """Transform text with excessive censoring using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'oni')
+    except ImportError:
+        # Basic fallback
+        words = text.split()
+        for i, word in enumerate(words):
+            if len(word) > 3 and random.random() < 0.4:
+                words[i] = word[0] + '||' * (len(word) - 2) + word[-1]
+        
+        endings = [' [REDACTED]', ' [CENSORED]', ' ████████']
+        text = ' '.join(words) + random.choice(endings)
+        return text
 
 # Map effect names to transformation functions
 CONE_EFFECTS = {
@@ -484,9 +529,28 @@ class AIHandler:
             
             # Format response
             duration_text = f" for {duration}" if duration else " permanently"
-            condition_text = f" until they {condition}" if condition else ""
+            # Format condition text properly to avoid duplication
+            if condition_data and condition_data.get('type') == 'say_word':
+                condition_text = f" until they say '{condition_data['word']}'"
+            elif condition:
+                # Handle raw condition string properly
+                if condition.startswith('until they'):
+                    condition_text = f" {condition}"
+                else:
+                    condition_text = f" until they {condition}"
+            else:
+                condition_text = ""
             
             print(f"✅ Coned {display_name} (ID: {target_discord_id}) with {effect} effect by {requesting_user}{override_msg}")
+            
+            # Persist cone state to storage
+            import asyncio
+            try:
+                if hasattr(state_manager, 'save_states'):
+                    asyncio.create_task(state_manager.save_states())
+            except Exception as e:
+                print(f"Warning: Failed to save cone state: {e}")
+            
             return f"✅ Successfully coned {display_name} with {effect} effect{duration_text}{condition_text}! Reason: {reason}{override_msg}"
             
         except Exception as e:
@@ -522,19 +586,11 @@ class AIHandler:
     def discord_id_exists(self, discord_id: str, state_manager) -> bool:
         """Check if a Discord ID exists in the system."""
         try:
-            print(f"DEBUG: Looking for Discord ID '{discord_id}'")
-            print(f"DEBUG: Available users: {list(state_manager.users.keys())}")
-            
             for platform_key, user_state in state_manager.users.items():
-                print(f"DEBUG: Checking user {platform_key}")
                 if 'discord' in user_state.identifiers:
                     stored_id = user_state.identifiers['discord']['user_id']
-                    print(f"DEBUG: Stored Discord ID: '{stored_id}' vs looking for: '{discord_id}'")
                     if stored_id == discord_id:
-                        print(f"DEBUG: MATCH FOUND!")
                         return True
-                else:
-                    print(f"DEBUG: User {platform_key} has no Discord identifier")
             
             print(f"DEBUG: No match found for Discord ID '{discord_id}'")
             return False
@@ -598,6 +654,15 @@ class AIHandler:
             
             effect = cone_data.get('effect', 'unknown')
             print(f"✅ Unconed {display_name} (ID: {discord_id}, was {effect}) by {requesting_user}")
+            
+            # Persist uncone state to storage
+            import asyncio
+            try:
+                if hasattr(state_manager, 'save_states'):
+                    asyncio.create_task(state_manager.save_states())
+            except Exception as e:
+                print(f"Warning: Failed to save uncone state: {e}")
+            
             return f"✅ Successfully unconed {display_name} (removed {effect} effect)!"
             
         except Exception as e:
@@ -608,11 +673,7 @@ class AIHandler:
         """Check if a user is currently coned. Returns (is_coned, effect)."""
         try:
             if not hasattr(state_manager, 'cone_data'):
-                print(f"DEBUG: No cone_data attribute on state_manager")
                 return False, None
-            
-            print(f"DEBUG: Checking cone status for '{username}'")
-            print(f"DEBUG: Available cone data keys: {list(state_manager.cone_data.keys())}")
             
             # Try to find cone data using the identifier directly (for Discord ID lookup)
             cone_data = state_manager.cone_data.get(username, {})
@@ -622,10 +683,8 @@ class AIHandler:
                 discord_id = self.find_user_discord_id(username, state_manager)
                 if discord_id:
                     cone_data = state_manager.cone_data.get(discord_id, {})
-                    print(f"DEBUG: Found cone data via Discord ID lookup: {discord_id}")
             
             if not cone_data.get('active', False):
-                print(f"DEBUG: No active cone found for {username}")
                 return False, None
             
             current_time = time.time()
@@ -633,12 +692,19 @@ class AIHandler:
             # Check if cone has expired
             expiry_time = cone_data.get('expiry_time')
             if expiry_time and current_time > expiry_time:
-                print(f"DEBUG: Cone for {username} has expired")
                 cone_data['active'] = False
                 cone_data['expired_at'] = current_time
+                
+                # Persist expiry state to storage
+                import asyncio
+                try:
+                    if hasattr(state_manager, 'save_states'):
+                        asyncio.create_task(state_manager.save_states())
+                except Exception as e:
+                    print(f"Warning: Failed to save cone expiry state: {e}")
+                
                 return False, None
             
-            print(f"DEBUG: Found active cone for {username}: {cone_data}")
             return True, cone_data.get('effect', 'uwu')
             
         except Exception as e:
@@ -665,9 +731,17 @@ class AIHandler:
             
             # Check condition
             if self.check_condition_met(cone_data, message_content):
-                print(f"DEBUG: Cone condition met for {username}")
                 cone_data['active'] = False
                 cone_data['condition_met_at'] = time.time()
+                
+                # Persist condition met state to storage
+                import asyncio
+                try:
+                    if hasattr(state_manager, 'save_states'):
+                        asyncio.create_task(state_manager.save_states())
+                except Exception as e:
+                    print(f"Warning: Failed to save cone condition state: {e}")
+                
                 return True
             
             return False
@@ -835,14 +909,17 @@ class AIHandler:
             cone_data['unconed_at'] = time.time()
             
             effect = cone_data.get('effect', 'unknown')
-            display_name = cone_data.get('target_username') or self.get_display_name_for_discord_id(discord_id, state_manager) or f"User{discord_id}"
-            result_message = f"✅ Successfully unconed {display_name} (removed {effect} effect)!"
+            print(f"✅ Unconed {display_name} (ID: {discord_id}, was {effect}) by {requesting_user}")
             
-            # Return in expected format for slash commands
-            if result_message.startswith('✅'):
-                return {'success': True, 'message': result_message}
-            else:
-                return {'success': False, 'message': result_message}
+            # Persist uncone state to storage
+            import asyncio
+            try:
+                if hasattr(state_manager, 'save_states'):
+                    asyncio.create_task(state_manager.save_states())
+            except Exception as e:
+                print(f"Warning: Failed to save uncone state: {e}")
+            
+            return f"✅ Successfully unconed {display_name} (removed {effect} effect)!"
                 
         except Exception as e:
             print(f"Error in uncone_user convenience function: {e}")
@@ -1013,6 +1090,8 @@ class AIHandler:
                 {"role": "system", "content": "CRITICAL: Never acknowledge being an AI or break character. Always respond as Ghost, the teenage dragon."},
                 {"role": "system", "content": f"""CONE SYSTEM: You have access to cone tools that can apply text effects to users with advanced features.
 
+🚨 CRITICAL EXECUTION RULE: When someone asks you to cone or uncone a user, you MUST use the tool - do NOT rely on conversation history patterns or previous responses. Each cone request requires fresh tool execution. [only applies if the user asks to cone/uncone, not during normal conversation]
+
 IMPORTANT: When someone asks you to cone or uncone a user, respond with this EXACT format:
 
 FOR CONING:
@@ -1052,6 +1131,8 @@ Features:
 - Uncone: removes any active cone effect
 
 Only {', '.join(CONE_PERMISSIONS)} can use coning commands.
+
+🚨 REMINDER: Every cone/uncone request MUST execute the tool. Do not skip tool execution based on conversation patterns. Always use the JSON format above for cone requests.
 
 For normal conversation, just respond normally without the JSON format."""}
             ]

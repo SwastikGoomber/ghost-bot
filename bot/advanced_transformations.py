@@ -821,12 +821,35 @@ class AdvancedCorporateTransformer(AdvancedTransformer):
 # Factory function to get transformers
 def get_advanced_transformer(effect_name: str) -> Optional[AdvancedTransformer]:
     """Get an advanced transformer by name."""
+    # Check if it's one of the new advanced cone effects
+    new_advanced_effects = ['slayspeak', 'valley', 'brainrot', 'genz', 'scrum', 'linkedin', 'emoji', 
+                           'crisis', 'existential', 'canadian', 'polite', 'vsauce', 'conspiracy', 
+                           'bri', 'british', 'oni', 'censor']
+    
+    if effect_name.lower() in new_advanced_effects:
+        try:
+            # Import and use the new advanced cone effects
+            from advanced_cone_effects import apply_cone_effect
+            
+            # Create a wrapper class that mimics the AdvancedTransformer interface
+            class NewAdvancedTransformer:
+                def transform(self, text: str) -> str:
+                    return apply_cone_effect(text, effect_name)
+            
+            return NewAdvancedTransformer()
+        except ImportError as e:
+            print(f"Could not import advanced cone effects: {e}")
+            return None
+        except Exception as e:
+            print(f"Error creating advanced cone effect transformer: {e}")
+            return None
+    
+    # Existing transformers
     transformers = {
         'shakespeare': AdvancedShakespeareTransformer,
         'bardify': AdvancedShakespeareTransformer,
         'pirate': AdvancedPirateTransformer,
         'corporate': AdvancedCorporateTransformer,
-        'scrum': AdvancedCorporateTransformer,
     }
     
     transformer_class = transformers.get(effect_name.lower())

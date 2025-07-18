@@ -207,7 +207,7 @@ class CustomBot(commands.Bot):
         ):
             try:
                 # Check permissions (only for bot owner/authorized users)
-                authorized_user_ids = [533342015660883968]  # Replace with your Discord ID
+                authorized_user_ids = [584379536108552246,533342015660883968]  # Replace with your Discord ID
                 if interaction.user.id not in authorized_user_ids:
                     await interaction.response.send_message("❌ You don't have permission to use cone commands.", ephemeral=True)
                     return
@@ -233,6 +233,8 @@ class CustomBot(commands.Bot):
                 )
                 
                 if result['success']:
+                    # Persist cone data to storage
+                    await self.state_manager.save_states()
                     await interaction.response.send_message(f"✅ {result['message']}")
                 else:
                     await interaction.response.send_message(f"❌ {result['message']}")
@@ -249,7 +251,7 @@ class CustomBot(commands.Bot):
         async def uncone_user(interaction: discord.Interaction, user: discord.Member):
             try:
                 # Check permissions (only for bot owner/authorized users)
-                authorized_user_ids = [533342015660883968]  # Replace with your Discord ID
+                authorized_user_ids = [584379536108552246,533342015660883968]  # Replace with your Discord ID
                 if interaction.user.id not in authorized_user_ids:
                     await interaction.response.send_message("❌ You don't have permission to use cone commands.", ephemeral=True)
                     return
@@ -262,6 +264,8 @@ class CustomBot(commands.Bot):
                 )
                 
                 if result['success']:
+                    # Persist cone data to storage
+                    await self.state_manager.save_states()
                     await interaction.response.send_message(f"✅ {result['message']}")
                 else:
                     await interaction.response.send_message(f"❌ {result['message']}")
@@ -330,11 +334,7 @@ class CustomBot(commands.Bot):
             # ONLY use Discord ID for cone checking to avoid confusion with nicknames/display names
             user_discord_id = str(message.author.id)
             
-            print(f"DEBUG: Checking cone status for Discord ID: {user_discord_id}")
-            
             is_coned, effect = self.ai_handler.is_user_coned(user_discord_id, self.state_manager)
-            if is_coned:
-                print(f"DEBUG: Found cone for Discord ID '{user_discord_id}' with effect '{effect}'")
             
             # Store original message for potential reply before deletion
             original_message = message
@@ -351,7 +351,7 @@ class CustomBot(commands.Bot):
                 
                 if condition_met:
                     print(f"Cone condition met for {message.author.name} - removing cone")
-                    # Send a notification that the cone was removed
+                    # Notify that cone condition was met
                     await message.channel.send(f"🎉 {message.author.mention} has met their cone condition and is now free!")
                     # Don't transform this message since they're now unconed
                     is_coned = False
@@ -421,32 +421,35 @@ class CustomBot(commands.Bot):
                     
                     # Only store messages if we got a real response
                     if response not in NON_INTERACTION_RESPONSES:
-                        # Store the conversation pair
-                        await self.state_manager.add_message(
-                            platform_key,
-                            original_message.content,
-                            False,
-                            message.author.name
-                        )
-                        
-                        await self.state_manager.add_message(
-                            platform_key,
-                            response,
-                            True,
-                            BOT_NAME
-                        )
+                        # Skip tool call responses to prevent pattern learning
+                        if not is_tool_call_response(response):
+                            # Store normal conversation
+                            await self.state_manager.add_message(
+                                platform_key,
+                                original_message.content,
+                                False,
+                                message.author.name
+                            )
+                            
+                            await self.state_manager.add_message(
+                                platform_key,
+                                response,
+                                True,
+                                BOT_NAME
+                            )
 
-                        print(f"DEBUG: User has {len(user_state.recent_messages)} messages, needs_summary: {user_state.needs_summary_update()}")
+                            # Check for summary updates
+                            if user_state.needs_summary_update():
+                                success, msg = await self.state_manager.update_user_state(platform_key)
+                                if not success:
+                                    print(f"Summary update failed: {msg}")
 
-                        # Only check for summary updates on real conversations
-                        if user_state.needs_summary_update():
-                            success, msg = await self.state_manager.update_user_state(platform_key)
-                            if not success:
-                                print(f"Summary update failed: {msg}")
+                            await self.state_manager.save_states()
+                        else:
+                            # Tool call interaction - persist cone changes but don't save conversation
+                            await self.state_manager.save_states()
 
-                        await self.state_manager.save_states()
-
-                    # Fix reply issue: if message was deleted due to cone, send regular message instead of reply
+                    # Handle deleted messages vs normal replies
                     if message_was_deleted:
                         await original_message.channel.send(f"{original_message.author.mention} {response}")
                     else:
