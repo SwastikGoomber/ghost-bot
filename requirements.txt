@@ -23,3 +23,8 @@ aiohttp-cors>=0.7.0  # Added for health check server
 # Monitoring & Storage
 motor>=3.3.0  # Async MongoDB driver
 psutil>=5.9.0
+
+# AI & Embeddings
+google-generativeai
+sentence-transformers
+numpy
