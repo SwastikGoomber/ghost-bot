@@ -340,8 +340,19 @@ class AIResponseError(Exception):
     pass
 
 class AIHandler:
-    def __init__(self):
+    def __init__(self, log_manager=None):
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.chat_headers = {
+            "Authorization": f"Bearer {OPENROUTER_CHAT_KEY}",
+            "Content-Type": "application/json"
+        }
+        self.summary_headers = {
+            "Authorization": f"Bearer {OPENROUTER_SUMMARY_KEY}",
+            "Content-Type": "application/json"
+        }
+        print(f"[DEBUG] AIHandler.__init__ called. Self ID: {id(self)}")
+        self.log_manager = log_manager
+        print(f"[DEBUG] AIHandler now has LogManager with ID: {id(self.log_manager) if self.log_manager else 'None'}")
         self.chat_headers = {
             "Authorization": f"Bearer {OPENROUTER_CHAT_KEY}",
             "Content-Type": "application/json"
@@ -1193,6 +1204,19 @@ For normal conversation, just respond normally without the JSON format."""}
                     "content": f"RECENT CONVERSATION CONTEXT: {user_state['summaries']['last_conversation']}"
                 })
             
+
+            if self.log_manager and self.log_manager.is_enabled():
+                print("\n=== HISTORICAL LOG SEARCH ===")
+                relevant_logs = await self.log_manager.get_relevant_logs(current_message)
+                if relevant_logs:
+                    log_context = self.log_manager.format_logs_for_context(relevant_logs)
+                    system_messages.append({"role": "system", "content": log_context})
+                else:
+                    print("No relevant historical logs found.")
+            else:
+                print("\n=== HISTORICAL LOG SEARCH ===")
+                print("LogManager is not available or not enabled. Skipping search.")
+
             # Append current message if provided
             if current_message:
                 formatted_messages.append({
@@ -1245,6 +1269,8 @@ For normal conversation, just respond normally without the JSON format."""}
                 elif content.startswith("MENTIONED USER:"):
                     msg_type = "MENTIONED USER"
                     # DON'T truncate user context
+                elif content.startswith("[HISTORICAL CONTEXT"):
+                    msg_type = "HISTORICAL LOGS"
                 elif content.startswith("RECENT CONVERSATION CONTEXT:"):
                     msg_type = "CONVERSATION CONTEXT"
                     # DON'T truncate conversation context
@@ -1451,6 +1477,18 @@ For normal conversation, just respond normally without the JSON format."""}
                     })
                     print(f"Added context for {username_display} ({'sender' if is_sender else 'mentioned'})")
             
+
+            print(f"[DEBUG] get_chat_response using AIHandler with ID: {id(self)}")
+            print(f"[DEBUG] AIHandler's LogManager at time of use has ID: {id(self.log_manager) if self.log_manager else 'None'}")
+
+            # Add historical log context if the log manager is available
+            if self.log_manager and self.log_manager.is_enabled():
+                relevant_logs = await self.log_manager.get_relevant_logs(current_message)
+                if relevant_logs:
+                    log_context = self.log_manager.format_logs_for_context(relevant_logs)
+                    print(f"\n=== ADDING HISTORICAL CONTEXT (VISION) ===\n{log_context}\n")
+                    system_messages.append({"role": "system", "content": log_context})
+
             # Create the current message with images
             current_user_message = {
                 "role": "user",

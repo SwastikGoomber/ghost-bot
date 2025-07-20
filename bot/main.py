@@ -86,35 +86,38 @@ async def start_health_server(state_manager: Optional[StateManager] = None):
         logger.error(f"Failed to start health check server: {e}")
 
 async def initialize_components() -> Tuple[AIHandler, StateManager, CustomBot, TwitchBot]:
-    """Initialize all shared components"""
+    """Initialize all shared components in the correct order."""
     try:
-        logger.info("Initializing AI handler...")
-        ai_handler = AIHandler()
-        
-        logger.info("Initializing state manager...")
+        # Step 1: Create the bot instance, which is needed by the LogManager.
+        logger.info("Initializing Discord bot instance...")
+        discord_bot = CustomBot()
+
+        # Step 2: Create the LogManager, passing the bot instance to it.
+        logger.info("Initializing Log Manager...")
+        log_manager = discord_bot.log_manager # The bot creates its own LogManager
+
+        # Step 3: Create the AIHandler, passing the bot's LogManager to it.
+        logger.info("Initializing AI Handler...")
+        ai_handler = AIHandler(log_manager=log_manager)
+
+        # Step 4: Create the StateManager, passing the single AIHandler to it.
+        logger.info("Initializing State Manager...")
         state_manager = StateManager(ai_handler)
-        
-        # Load states if using MongoDB
+
+        # Step 5: Attach the fully wired managers back to the bot instance.
+        discord_bot.set_managers(ai_handler=ai_handler, state_manager=state_manager)
+        logger.info("All components initialized and linked.")
+
+        # Step 6: Load states now that all components are ready.
         if os.environ.get('MONGODB_URI'):
             logger.info("Loading states from MongoDB...")
-            retry_delay = 1
-            for attempt in range(3):  # Try 3 times
-                try:
-                    await state_manager.load_states()
-                    logger.info("States loaded successfully")
-                    break
-                except Exception as e:
-                    if attempt == 2:  # Last attempt failed
-                        logger.error(f"Failed to load states after 3 attempts: {e}")
-                        raise
-                    logger.warning(f"Attempt {attempt + 1} failed, retrying in {retry_delay}s...")
-                    await asyncio.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-        
-        logger.info("Initializing bots...")
-        discord_bot = CustomBot(state_manager, ai_handler)
+            await state_manager.load_states()
+            logger.info("States loaded successfully")
+
+        # Step 7: Initialize the Twitch bot with the shared managers.
+        logger.info("Initializing Twitch bot...")
         twitch_bot = TwitchBot(state_manager, ai_handler)
-        
+
         return ai_handler, state_manager, discord_bot, twitch_bot
         
     except Exception as e:

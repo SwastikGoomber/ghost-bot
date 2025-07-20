@@ -8,23 +8,44 @@ from datetime import datetime, timedelta
 import random
 from state_manager import StateManager
 from ai_handler import AIHandler
+from log_manager import LogManager # Import the new LogManager
+from discord.ext import tasks # Import tasks for scheduling
 import traceback
 
 # Get the guild ID from environment or config
 DISCORD_GUILD_ID = os.getenv('DISCORD_GUILD_ID')
 
 class CustomBot(commands.Bot):
-    def __init__(self, state_manager: StateManager = None, ai_handler: AIHandler = None):
+    def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
         super().__init__(command_prefix="!", intents=intents)
         
-        self.ai_handler = ai_handler or AIHandler()
-        self.state_manager = state_manager or StateManager(self.ai_handler)
+        # The LogManager needs a reference to the bot, so it's created here.
+        self.log_manager = LogManager(self)
+
+        # AI and State managers will be set by main.py after initialization.
+        self.ai_handler = None
+        self.state_manager = None
+
         self.daily_requests = 0
         self.minute_requests = deque(maxlen=20)
         self.nap_until = None
+
+    def set_managers(self, ai_handler: AIHandler, state_manager: StateManager):
+        """Sets the AI and State managers from the main initializer."""
+        self.ai_handler = ai_handler
+        self.state_manager = state_manager
+
+    @tasks.loop(hours=12)
+    async def check_logs_task(self):
+        """
+        Background task that runs periodically to fetch and process new logs.
+        """
+        # Ensure the bot is ready before running the task
+        await self.wait_until_ready()
+        await self.log_manager.fetch_and_process_new_logs()
 
     def extract_image_urls(self, message):
         """Extract image URLs from Discord message attachments"""
@@ -43,6 +64,12 @@ class CustomBot(commands.Bot):
         # Initialize state manager if using MongoDB
         if os.environ.get('MONGODB_URI'):
             await self.state_manager.load_states()
+
+        # Initialize the LogManager
+        await self.log_manager.initialize()
+
+        # Start the background task to check for new logs
+        self.check_logs_task.start()
 
         # Register commands
         @self.tree.command(name="limits", description="Check remaining API limits and bot's state")

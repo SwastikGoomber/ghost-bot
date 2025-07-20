@@ -68,3 +68,5 @@ states_backup_*.json
 
 #misc
 TODO.md
+existing_logs.txt
+existing_logs_backup.txt
