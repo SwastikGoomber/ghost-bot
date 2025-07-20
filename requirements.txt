@@ -10,7 +10,7 @@ pymongo[srv]>=4.6.0  # MongoDB with DNS SRV support
 spacy>=3.4.0,<4.0.0
 nltk>=3.8.0
 textblob>=0.17.0  # Simple NLP tasks and sentiment
-pattern3>=3.6.0  # Text pattern matching and transformation
+pattern
 wordnet>=0.0.1b2  # WordNet access for synonyms
 
 # Deployment and Web
