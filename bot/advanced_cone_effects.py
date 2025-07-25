@@ -1565,6 +1565,228 @@ class AdvancedConeEffects:
         
         return result
 
+    def apply_dyslexia(self, text: str) -> str:
+        """Advanced dyslexia transformation using NLP libraries for dynamic, realistic effects"""
+        
+        # Character-level visual confusion mappings (based on actual letter shape similarities)
+        visual_confusion = {
+            'b': ['d', 'p', 'q'], 'd': ['b', 'p', 'q'], 'p': ['b', 'd', 'q'], 'q': ['b', 'd', 'p'],
+            'm': ['w', 'n'], 'w': ['m', 'v'], 'n': ['m', 'u', 'h'], 'u': ['n', 'v'],
+            'f': ['t', 'l'], 't': ['f', 'l'], 'l': ['i', 'j', '1'], 'i': ['l', 'j', '1'],
+            'a': ['e', 'o'], 'e': ['a', 'o'], 'o': ['a', 'e'], 's': ['z', '5'], 'z': ['s', '2'],
+            'g': ['6', '9'], '6': ['9', 'g'], '9': ['6', 'g'], '0': ['o', 'O'], 'O': ['0', 'o'],
+            'S': ['5', 'Z'], 'Z': ['S', '2'], 'I': ['l', '1', 'L'], 'L': ['I', '1', 'l']
+        }
+        
+        # Phonetic confusion patterns (common sound-alike errors)
+        phonetic_patterns = [
+            (r'tion\b', ['shun', 'sion', 'shon']),
+            (r'ough\b', ['uf', 'off', 'ow']),
+            (r'augh\b', ['af', 'aw', 'alf']),
+            (r'eigh\b', ['ay', 'ey', 'a']),
+            (r'ph', ['f', 'pf']),
+            (r'ch', ['k', 'sh', 'tch']),
+            (r'th', ['f', 'd', 't']),
+            (r'ck\b', ['k', 'c']),
+            (r'qu', ['kw', 'q']),
+            (r'x', ['ks', 'z']),
+        ]
+        
+        result = text
+        
+        # Apply transformations with different probability layers
+        
+        # 1. CHARACTER-LEVEL VISUAL CONFUSION (works on any text)
+        char_result = []
+        for char in result:
+            if char.lower() in visual_confusion and random.random() < 0.12:  # 12% chance per character
+                confusion_options = visual_confusion[char.lower()]
+                new_char = random.choice(confusion_options)
+                # Preserve original case
+                if char.isupper():
+                    new_char = new_char.upper()
+                char_result.append(new_char)
+            else:
+                char_result.append(char)
+        result = ''.join(char_result)
+        
+        # 2. PHONETIC PATTERN SUBSTITUTIONS (probability-based)
+        for pattern, replacements in phonetic_patterns:
+            if random.random() < 0.25:  # 25% chance to apply each pattern
+                matches = re.finditer(pattern, result, re.IGNORECASE)
+                for match in reversed(list(matches)):  # Reverse to maintain positions
+                    if random.random() < 0.4:  # 40% chance to replace each match
+                        replacement = random.choice(replacements)
+                        # Preserve case of original
+                        if match.group().isupper():
+                            replacement = replacement.upper()
+                        elif match.group()[0].isupper():
+                            replacement = replacement.capitalize()
+                        result = result[:match.start()] + replacement + result[match.end():]
+        
+        # 3. SYLLABLE AND WORD-LEVEL SCRAMBLING (using spaCy if available)
+        if self.spacy_available:
+            doc = self.nlp(result)
+            words = []
+            for token in doc:
+                if token.is_alpha and len(token.text) > 3:
+                    scrambled = self._advanced_word_scramble(token.text, token.pos_)
+                    words.append(scrambled)
+                else:
+                    words.append(token.text_with_ws)
+            result = ''.join(words).strip()
+        else:
+            # Fallback: simple word scrambling
+            words = result.split()
+            for i, word in enumerate(words):
+                if len(word) > 4 and word.isalpha() and random.random() < 0.2:
+                    words[i] = self._simple_scramble(word)
+            result = ' '.join(words)
+        
+        # 4. READING PATTERN SIMULATION (attention/focus issues)
+        if random.random() < 0.3:  # 30% chance to apply reading disruption
+            result = self._simulate_reading_disruption(result)
+        
+        # 5. WORKING MEMORY ERRORS (letter additions/omissions)
+        result = self._apply_memory_errors(result)
+        
+        # 6. SEQUENCE REVERSAL (small chunks occasionally get flipped)
+        if random.random() < 0.25:  # 25% chance
+            result = self._apply_sequence_reversals(result)
+        
+        return result
+    
+    def _advanced_word_scramble(self, word: str, pos: str) -> str:
+        """Advanced word scrambling based on POS tag and word characteristics"""
+        if len(word) <= 3:
+            return word
+        
+        # Different scrambling strategies based on part of speech
+        scramble_probability = {
+            'NOUN': 0.3, 'VERB': 0.35, 'ADJ': 0.25, 'ADV': 0.4,  # Content words more likely
+            'DET': 0.1, 'PREP': 0.15, 'CONJ': 0.1  # Function words less likely
+        }
+        
+        prob = scramble_probability.get(pos, 0.2)
+        if random.random() > prob:
+            return word
+        
+        # Keep first and last, scramble middle (classic dyslexic pattern)
+        if len(word) > 4:
+            first, middle, last = word[0], list(word[1:-1]), word[-1]
+            random.shuffle(middle)
+            return first + ''.join(middle) + last
+        else:
+            # For shorter words, just swap adjacent letters sometimes
+            if random.random() < 0.5 and len(word) == 4:
+                return word[0] + word[2] + word[1] + word[3]
+        
+        return word
+    
+    def _simple_scramble(self, word: str) -> str:
+        """Simple scrambling for when spaCy isn't available"""
+        if len(word) <= 3:
+            return word
+        
+        # Various scrambling patterns
+        patterns = [
+            lambda w: w[0] + ''.join(random.sample(w[1:-1], len(w[1:-1]))) + w[-1],  # Scramble middle
+            lambda w: w[1] + w[0] + w[2:] if len(w) > 2 else w,  # Swap first two
+            lambda w: w[:-2] + w[-1] + w[-2] if len(w) > 3 else w,  # Swap last two
+        ]
+        
+        return random.choice(patterns)(word)
+    
+    def _simulate_reading_disruption(self, text: str) -> str:
+        """Simulate attention/focus issues that cause reading disruption"""
+        words = text.split()
+        if len(words) < 3:
+            return text
+        
+        # Simulate jumping around while reading (word order confusion)
+        disruption_types = [
+            self._swap_adjacent_words,
+            self._repeat_word,
+            self._skip_word
+        ]
+        
+        disruption = random.choice(disruption_types)
+        return disruption(words)
+    
+    def _swap_adjacent_words(self, words: list) -> str:
+        """Swap two adjacent words"""
+        if len(words) < 2:
+            return ' '.join(words)
+        
+        idx = random.randint(0, len(words) - 2)
+        words[idx], words[idx + 1] = words[idx + 1], words[idx]
+        return ' '.join(words)
+    
+    def _repeat_word(self, words: list) -> str:
+        """Repeat a word (working memory loop)"""
+        if not words:
+            return ' '.join(words)
+        
+        idx = random.randint(0, len(words) - 1)
+        repeat_patterns = [
+            f"{words[idx]} {words[idx]}",  # Simple repeat
+            f"{words[idx][:2]}-{words[idx]}",  # Stutter pattern
+        ]
+        words[idx] = random.choice(repeat_patterns)
+        return ' '.join(words)
+    
+    def _skip_word(self, words: list) -> str:
+        """Skip a word (attention lapse)"""
+        if len(words) <= 2:
+            return ' '.join(words)
+        
+        # Skip a non-critical word (not first or last)
+        idx = random.randint(1, len(words) - 2)
+        words.pop(idx)
+        return ' '.join(words)
+    
+    def _apply_memory_errors(self, text: str) -> str:
+        """Apply working memory errors (letter drops/additions)"""
+        result = []
+        
+        for char in text:
+            # Letter omission (more common in longer words)
+            if char.isalpha() and random.random() < 0.05:  # 5% omission chance
+                continue  # Skip this letter
+            
+            result.append(char)
+            
+            # Letter addition/doubling (less common)
+            if char.isalpha() and random.random() < 0.03:  # 3% addition chance
+                if random.random() < 0.7:
+                    result.append(char)  # Double the letter
+                else:
+                    # Add a visually similar letter
+                    similar = {'a': 'e', 'e': 'a', 'i': 'l', 'o': 'a', 'u': 'n'}
+                    result.append(similar.get(char.lower(), char))
+        
+        return ''.join(result)
+    
+    def _apply_sequence_reversals(self, text: str) -> str:
+        """Apply small sequence reversals (2-3 character flips)"""
+        result = text
+        words = result.split()
+        
+        for i, word in enumerate(words):
+            if len(word) > 4 and random.random() < 0.15:  # 15% chance per word
+                # Pick a random position to start reversal
+                start = random.randint(1, len(word) - 3)
+                length = random.choice([2, 3])  # Reverse 2-3 characters
+                end = min(start + length, len(word) - 1)
+                
+                # Reverse the subsequence
+                before = word[:start]
+                reversed_part = word[start:end][::-1]
+                after = word[end:]
+                words[i] = before + reversed_part + after
+        
+        return ' '.join(words)
+
 # Helper function to apply effects
 def apply_cone_effect(text: str, effect: str) -> str:
     """Apply the specified cone effect to text"""
@@ -1588,7 +1810,10 @@ def apply_cone_effect(text: str, effect: str) -> str:
         'bri': processor.apply_british,
         'british': processor.apply_british,  # alias
         'oni': processor.apply_oni,
-        'censor': processor.apply_oni  # alias
+        'censor': processor.apply_oni,  # alias
+        'dyslexia': processor.apply_dyslexia,
+        'dickslexia': processor.apply_dyslexia,  # alias
+        'ro': processor.apply_dyslexia  # alias
     }
     
     if effect.lower() in effect_map:
