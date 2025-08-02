@@ -23,7 +23,7 @@ LOG_CHANNEL_ID = 1371121095683346534
 
 # --- Models ---
 # Model for semantic analysis of log chunks (using Gemini)
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash"
 # Model for local embedding generation (runs on CPU)
 LOCAL_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 

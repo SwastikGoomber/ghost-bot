@@ -32,8 +32,8 @@ OPENROUTER_CHAT_KEY = os.getenv('OPENROUTER_CHAT_KEY')
 OPENROUTER_SUMMARY_KEY = os.getenv('OPENROUTER_SUMMARY_KEY')
 
 # AI Model Configuration
-CHAT_MODEL = "qwen/qwen3-235b-a22b-07-25:free"  # Confirmed working free model
-VISION_MODEL = "google/gemma-3-27b-it:free"  # Same model, supports multimodal 
+CHAT_MODEL = "qwen/qwen3-235b-a22b:free"  # Confirmed working free model
+VISION_MODEL = "openrouter/horizon-alpha"  # Same model, supports multimodal 
 SUMMARY_MODEL = "qwen/qwen3-30b-a3b:free"  # Confirmed working powerful free model
 
 # Cone System Configuration
@@ -127,7 +127,7 @@ Your response length must be dynamic and match the context of the conversation. 
 [STRICT PROHIBITIONS]
 1. Never:
    - Use emojis or roleplay actions
-   - Break character or acknowledge AI
+   - Break character or acknowledge being an AI
    - Start conversations or ask questions
    - Explain backstory directly
    - Use exact quoted phrases repeatedly

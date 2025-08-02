@@ -1079,21 +1079,42 @@ class AIHandler:
         return "\n".join(formatted)
 
     def clean_response(self, text: str) -> str:
-        # Remove common patterns and formatting
+        """More robustly clean response from the model."""
+        # Remove chain-of-thought or inner monologue tags
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+        # Remove any JSON code blocks that might be accidentally included
+        text = re.sub(r'```json\s*\{.*?\}\s*```', '', text, flags=re.DOTALL)
+
+        lines = text.split('\n')
+        
+        # Filter out empty lines and common instruction-like phrases
+        cleaned_lines = []
+        instructional_phrases = [
+            'incorporating the spirit', 'also:', 'raw response:', 'cleaned response:',
+            'user:', 'assistant:', 'ghost:'
+        ]
+        
+        for line in lines:
+            line_lower = line.lower()
+            if not line.strip():
+                continue
+            if any(phrase in line_lower for phrase in instructional_phrases):
+                continue
+            cleaned_lines.append(line)
+
+        if not cleaned_lines:
+            return "" # Return empty if nothing is left
+
+        # Join the remaining lines and do final cleanup
+        text = ' '.join(cleaned_lines)
+
         text = text.replace("USER:", "").replace("ASSISTANT:", "").strip()
-        # text = text.replace("*", "").strip()
         text = re.sub(r'\[Ghost\]:', '', text, flags=re.IGNORECASE)
         text = text.replace('Ghost:', '').strip()
         text = text.strip('"').strip("'")
-        
-        # Take first line only
-        if "\n" in text:
-            text = text.split("\n")[0]
-        
-        # Clean formatting
-        text = re.sub(r'\([^)]*\)', '', text)  # Remove parentheses
-        text = re.sub(r'([!?.]){2,}', r'\1', text)  # Fix punctuation
-        # text = re.sub(r'[\U0001F300-\U0001F9FF]', '', text)  # Remove emojis
+        text = re.sub(r'\([^)]*\)', '', text)  # Remove text in parentheses
+        text = re.sub(r'([!?.]){2,}', r'\1', text) # Fix repeated punctuation
         
         return text.strip()
 
