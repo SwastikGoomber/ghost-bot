@@ -243,7 +243,8 @@ class CustomBot(commands.Bot):
                 valid_effects = ['uwu', 'pirate', 'shakespeare', 'bardify', 'valley', 'slayspeak', 'genz', 
                                'brainrot', 'corporate', 'scrum', 'caveman', 'unga', 'drunk', 'drunkard', 
                                'emoji', 'linkedin', 'existential', 'crisis', 'polite', 'canadian', 
-                               'conspiracy', 'vsauce', 'british', 'bri', 'censor', 'oni']
+                               'conspiracy', 'vsauce', 'british', 'bri', 'censor', 'oni', 'dyslexia', 
+                               'dickslexia', 'ro']
                 
                 if effect.lower() not in valid_effects:
                     await interaction.response.send_message(f"❌ Invalid effect. Available: {', '.join(valid_effects)}", ephemeral=True)

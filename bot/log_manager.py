@@ -100,10 +100,6 @@ class LogManager:
             query_vector = self.local_embedder.encode(query).tolist()
 
             # 2. Perform a vector search query on MongoDB
-            # MongoDB's $vectorSearch is efficient and the modern way to do this.
-            # This requires creating a vector search index on your collection.
-            # See MongoDB Atlas documentation for creating a "Vector Search" index.
-            # Index definition example:
             # {
             #   "fields": [
             #     {

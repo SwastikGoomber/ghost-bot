@@ -1304,13 +1304,6 @@ For normal conversation, just respond normally without the JSON format."""}
                     "content": current_message
                 })
                 
-            # payload = {
-            #     "model": "meta-llama/llama-3.3-70b-instruct:free",
-            #     "messages": [
-            #         *system_messages,
-            #         *formatted_messages
-            #     ]
-            # }
             payload = {
                 "model": CHAT_MODEL,
                  "messages": [
