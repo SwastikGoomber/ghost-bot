@@ -235,6 +235,62 @@ def transform_censor(text):
         text = ' '.join(words) + random.choice(endings)
         return text
 
+def transform_dyslexia(text):
+    """Transform text with advanced dyslexic-style transformations using advanced effects."""
+    try:
+        from advanced_cone_effects import apply_cone_effect
+        return apply_cone_effect(text, 'dyslexia')
+    except ImportError:
+        # Comprehensive fallback implementation using basic techniques
+        import re
+        
+        # Basic visual confusion mappings
+        visual_swaps = {
+            'b': 'd', 'd': 'b', 'p': 'q', 'q': 'p', 'm': 'w', 'w': 'm',
+            'n': 'u', 'u': 'n', 'f': 't', 't': 'f', 'l': 'i', 'i': 'l'
+        }
+        
+        result = []
+        for char in text:
+            if char.lower() in visual_swaps and random.random() < 0.15:
+                swapped = visual_swaps[char.lower()]
+                if char.isupper():
+                    swapped = swapped.upper()
+                result.append(swapped)
+            else:
+                result.append(char)
+        
+        text = ''.join(result)
+        
+        # Basic phonetic patterns
+        phonetic_subs = [
+            ('tion', 'shun'), ('ough', 'uf'), ('ph', 'f'), ('ch', 'k'), ('th', 'f')
+        ]
+        
+        for old, new in phonetic_subs:
+            if random.random() < 0.3:
+                text = re.sub(old, new, text, flags=re.IGNORECASE)
+        
+        # Simple word scrambling
+        words = text.split()
+        for i, word in enumerate(words):
+            if len(word) > 4 and word.isalpha() and random.random() < 0.25:
+                # Keep first and last, scramble middle
+                first, middle, last = word[0], list(word[1:-1]), word[-1]
+                random.shuffle(middle)
+                words[i] = first + ''.join(middle) + last
+        
+        # Memory errors (letter omissions)
+        final_result = []
+        for char in ' '.join(words):
+            if char.isalpha() and random.random() < 0.05:
+                continue  # Skip letter (omission)
+            final_result.append(char)
+            if char.isalpha() and random.random() < 0.03:
+                final_result.append(char)  # Double letter
+        
+        return ''.join(final_result)
+
 # Map effect names to transformation functions
 CONE_EFFECTS = {
     'uwu': transform_uwufy,
@@ -263,6 +319,9 @@ CONE_EFFECTS = {
     'bri': transform_british,  # Alias
     'censor': transform_censor,
     'oni': transform_censor,  # Alias
+    'dyslexia': transform_dyslexia,
+    'dickslexia': transform_dyslexia,  # Alias
+    'ro': transform_dyslexia,  # Alias
 }
 
 def apply_cone_effect(text: str, effect_name: str) -> str:
@@ -1020,21 +1079,42 @@ class AIHandler:
         return "\n".join(formatted)
 
     def clean_response(self, text: str) -> str:
-        # Remove common patterns and formatting
+        """More robustly clean response from the model."""
+        # Remove chain-of-thought or inner monologue tags
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+        # Remove any JSON code blocks that might be accidentally included
+        text = re.sub(r'```json\s*\{.*?\}\s*```', '', text, flags=re.DOTALL)
+
+        lines = text.split('\n')
+        
+        # Filter out empty lines and common instruction-like phrases
+        cleaned_lines = []
+        instructional_phrases = [
+            'incorporating the spirit', 'also:', 'raw response:', 'cleaned response:',
+            'user:', 'assistant:', 'ghost:'
+        ]
+        
+        for line in lines:
+            line_lower = line.lower()
+            if not line.strip():
+                continue
+            if any(phrase in line_lower for phrase in instructional_phrases):
+                continue
+            cleaned_lines.append(line)
+
+        if not cleaned_lines:
+            return "" # Return empty if nothing is left
+
+        # Join the remaining lines and do final cleanup
+        text = ' '.join(cleaned_lines)
+
         text = text.replace("USER:", "").replace("ASSISTANT:", "").strip()
-        # text = text.replace("*", "").strip()
         text = re.sub(r'\[Ghost\]:', '', text, flags=re.IGNORECASE)
         text = text.replace('Ghost:', '').strip()
         text = text.strip('"').strip("'")
-        
-        # Take first line only
-        if "\n" in text:
-            text = text.split("\n")[0]
-        
-        # Clean formatting
-        text = re.sub(r'\([^)]*\)', '', text)  # Remove parentheses
-        text = re.sub(r'([!?.]){2,}', r'\1', text)  # Fix punctuation
-        # text = re.sub(r'[\U0001F300-\U0001F9FF]', '', text)  # Remove emojis
+        text = re.sub(r'\([^)]*\)', '', text)  # Remove text in parentheses
+        text = re.sub(r'([!?.]){2,}', r'\1', text) # Fix repeated punctuation
         
         return text.strip()
 
@@ -1224,13 +1304,6 @@ For normal conversation, just respond normally without the JSON format."""}
                     "content": current_message
                 })
                 
-            # payload = {
-            #     "model": "meta-llama/llama-3.3-70b-instruct:free",
-            #     "messages": [
-            #         *system_messages,
-            #         *formatted_messages
-            #     ]
-            # }
             payload = {
                 "model": CHAT_MODEL,
                  "messages": [

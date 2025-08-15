@@ -234,7 +234,7 @@ class CustomBot(commands.Bot):
         ):
             try:
                 # Check permissions (only for bot owner/authorized users)
-                authorized_user_ids = [584379536108552246,533342015660883968]  # Replace with your Discord ID
+                authorized_user_ids = [584379536108552246,209422949009195008,939512133350211625,145297670242566144,1394673202265063484]  # Replace with your Discord ID
                 if interaction.user.id not in authorized_user_ids:
                     await interaction.response.send_message("❌ You don't have permission to use cone commands.", ephemeral=True)
                     return
@@ -243,7 +243,8 @@ class CustomBot(commands.Bot):
                 valid_effects = ['uwu', 'pirate', 'shakespeare', 'bardify', 'valley', 'slayspeak', 'genz', 
                                'brainrot', 'corporate', 'scrum', 'caveman', 'unga', 'drunk', 'drunkard', 
                                'emoji', 'linkedin', 'existential', 'crisis', 'polite', 'canadian', 
-                               'conspiracy', 'vsauce', 'british', 'bri', 'censor', 'oni']
+                               'conspiracy', 'vsauce', 'british', 'bri', 'censor', 'oni', 'dyslexia', 
+                               'dickslexia', 'ro']
                 
                 if effect.lower() not in valid_effects:
                     await interaction.response.send_message(f"❌ Invalid effect. Available: {', '.join(valid_effects)}", ephemeral=True)
@@ -278,7 +279,7 @@ class CustomBot(commands.Bot):
         async def uncone_user(interaction: discord.Interaction, user: discord.Member):
             try:
                 # Check permissions (only for bot owner/authorized users)
-                authorized_user_ids = [584379536108552246,533342015660883968]  # Replace with your Discord ID
+                authorized_user_ids = [584379536108552246,209422949009195008,939512133350211625,145297670242566144,1394673202265063484]  # Replace with your Discord ID
                 if interaction.user.id not in authorized_user_ids:
                     await interaction.response.send_message("❌ You don't have permission to use cone commands.", ephemeral=True)
                     return
