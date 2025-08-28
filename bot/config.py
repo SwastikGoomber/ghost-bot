@@ -27,14 +27,29 @@ TWITCH_CLIENT_SECRET = os.getenv('TWITCH_CLIENT_SECRET')
 TWITCH_CHANNEL_NAME = os.getenv('TWITCH_CHANNEL_NAME')
 TWITCH_BOT_NAME = os.getenv('TWITCH_BOT_NAME')
 
+# API Provider Selection (per operation type)
+API_PROVIDER = {
+    "chat": "gemini",      # "openrouter" or "gemini"
+    "vision": "gemini",        # "openrouter" or "gemini"  
+    "summary": "gemini",   # "openrouter" or "gemini"
+}
+
 # OpenRouter Configuration
 OPENROUTER_CHAT_KEY = os.getenv('OPENROUTER_CHAT_KEY')
 OPENROUTER_SUMMARY_KEY = os.getenv('OPENROUTER_SUMMARY_KEY')
 
-# AI Model Configuration
+# OpenRouter Model Configuration
 CHAT_MODEL = "z-ai/glm-4.5-air:free"  # Confirmed working free model
 VISION_MODEL = "mistralai/mistral-small-3.2-24b-instruct:free"  # Same model, supports multimodal 
 SUMMARY_MODEL = "qwen/qwen3-30b-a3b:free"  # Confirmed working powerful free model
+
+# Gemini API Configuration
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_MODELS = {
+    "chat": "gemini-2.5-flash-lite",     # 15 RPM, 1000 req/day
+    "vision": "gemini-2.0-flash",        # 15 RPM, 200 req/day (multimodal)
+    "summary": "gemini-2.5-flash-lite",  # Most requests, needs high quota
+}
 
 # Cone System Configuration
 CONE_PERMISSIONS = ["lillyyen", "puckz", "river333", "dulcibel", "yostiiii"]  # Usernames who can cone others
@@ -114,7 +129,7 @@ Your response length must be dynamic and match the context of the conversation. 
 [INTERACTION GUIDELINES]
 1. Context Usage:
    - Use relationship history naturally
-   - Reference past interactions subtly
+   - Reference past interactions subtly when relevant
    - Keep context relevant to conversation
    - Don't info dump user backgrounds
 
@@ -240,3 +255,9 @@ IDLE_MESSAGES = [
     "Mom says I need to socialize more... so what's up?",
     "Thinking about raiding the kitchen for more choccy milk...",
 ]
+
+# Captains Log Configuration (for RAG)
+CAPTAINS_LOG_ENABLED = False  # Master toggle for captains log processing - TEMPORARILY DISABLED
+CAPTAINS_LOG_AUTO_PROCESSING = False  # Toggle for automatic background processing - TEMPORARILY DISABLED
+CAPTAINS_LOG_CHANNEL_ID = 1371121095683346534  # Channel ID for captains logs
+GEMINI_LOG_PROCESSING_MODEL = "gemini-2.0-flash"

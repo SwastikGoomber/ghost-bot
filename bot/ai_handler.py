@@ -19,11 +19,28 @@ try:
         CHAT_MODEL,
         VISION_MODEL,
         SUMMARY_MODEL,
-        CONE_PERMISSIONS
+        CONE_PERMISSIONS,
+        API_PROVIDER,
+        GEMINI_API_KEY,
+        GEMINI_MODELS
     )
 except Exception as e:
     print(f"Config Error: {e}")
     raise
+
+# Import Gemini handler if available
+try:
+    from gemini_handler import GeminiHandler
+    if GEMINI_API_KEY:
+        gemini_handler = GeminiHandler(GEMINI_API_KEY)
+        GEMINI_AVAILABLE = True
+    else:
+        gemini_handler = None
+        GEMINI_AVAILABLE = False
+except ImportError:
+    print("Gemini handler not available")
+    gemini_handler = None
+    GEMINI_AVAILABLE = False
 
 import random
 import re
@@ -979,7 +996,7 @@ class AIHandler:
             cone_data['unconed_at'] = time.time()
             
             effect = cone_data.get('effect', 'unknown')
-            print(f"✅ Unconed {display_name} (ID: {discord_id}, was {effect}) by {requesting_user}")
+            print(f"✅ Unconed {display_name} (ID: {discord_id}, was {effect}) by {admin_user}")
             
             # Persist uncone state to storage
             import asyncio
@@ -1374,10 +1391,103 @@ For normal conversation, just respond normally without the JSON format."""}
                     role = "USER" if msg['role'] == 'user' else "GHOST"
                     print(f"[{role}] {msg['content']}")
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
-                    print(f"\n=== API RESPONSE ===")
-                    print(f"Status: {response.status}")
+            # Route to appropriate API based on config
+            provider = API_PROVIDER.get("chat", "openrouter")
+            
+            if provider == "gemini" and GEMINI_AVAILABLE:
+                print(f"\n=== USING GEMINI API ===")
+                print(f"Model: {GEMINI_MODELS.get('chat')}")
+                
+                try:
+                    # Convert to sync call for Gemini (it's not async)
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    
+                    # Prepare messages for Gemini
+                    gemini_messages = []
+                    
+                    # Combine system messages into a single context
+                    system_context = "\n\n".join([msg["content"] for msg in system_messages])
+                    
+                    # Add conversation history
+                    for msg in formatted_messages:
+                        gemini_messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"]
+                        })
+                    
+                    # Check if this is a cone request
+                    enable_tools = False
+                    enable_web_search = False
+                    
+                    if current_message:
+                        # Check for cone requests
+                        if any(word in current_message.lower() for word in ["cone", "uncone"]):
+                            # Check if user has permission
+                            if username in CONE_PERMISSIONS:
+                                enable_tools = True
+                        
+                        # Check for explicit web search requests
+                        web_search_keywords = [
+                            "search the web", "search web", "web search", "google search",
+                            "search for", "look up", "find information about",
+                            "what's happening with", "latest news", "current events",
+                            "search online", "check online", "find online"
+                        ]
+                        if any(keyword in current_message.lower() for keyword in web_search_keywords):
+                            enable_web_search = True
+                    
+                    # Call Gemini in executor to avoid blocking
+                    response_text, tool_call = await loop.run_in_executor(
+                        None,
+                        gemini_handler.get_chat_response,
+                        gemini_messages,
+                        system_context,
+                        GEMINI_MODELS.get("chat"),
+                        enable_tools,
+                        enable_web_search
+                    )
+                    
+                    # Handle tool calls if present
+                    if tool_call:
+                        print(f"Tool call detected: {tool_call}")
+                        # Convert Gemini tool call format to our format
+                        if tool_call["tool"] == "cone_user":
+                            action_data = {
+                                "action": "cone_user",
+                                **tool_call["arguments"]
+                            }
+                        elif tool_call["tool"] == "uncone_user":
+                            action_data = {
+                                "action": "uncone_user",
+                                **tool_call["arguments"]
+                            }
+                        else:
+                            action_data = None
+                        
+                        # Process tool call
+                        if action_data:
+                            result = self.handle_cone_command(action_data, username, state_manager)
+                            return result
+                    
+                    print(f"Response: {response_text[:200]}...")
+                    return response_text
+                    
+                except Exception as e:
+                    print(f"Gemini API error: {e}")
+                    # No fallback - return error response directly
+                    from config import ERROR_RESPONSES
+                    import random
+                    return random.choice(ERROR_RESPONSES)
+            
+            if provider == "openrouter":
+                print(f"\n=== USING OPENROUTER API ===")
+                print(f"Model: {CHAT_MODEL}")
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
+                        print(f"\n=== API RESPONSE ===")
+                        print(f"Status: {response.status}")
                     
                     if response.status == 200:
                         data = await response.json()
@@ -1607,10 +1717,57 @@ For normal conversation, just respond normally without the JSON format."""}
             print(f"Images: {len(image_urls or [])}")
             print(f"Total request size: {len(str(payload))} characters")
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
-                    print(f"\n=== VISION API RESPONSE ===")
-                    print(f"Status: {response.status}")
+            # Route to appropriate API based on config
+            provider = API_PROVIDER.get("vision", "openrouter")
+            
+            if provider == "gemini" and GEMINI_AVAILABLE:
+                print(f"\n=== USING GEMINI VISION API ===")
+                print(f"Model: {GEMINI_MODELS.get('vision')}")
+                
+                try:
+                    # Convert to sync call for Gemini
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    
+                    # Combine system messages into context
+                    system_context = "\n\n".join([msg["content"] for msg in system_messages])
+                    
+                    # Call Gemini vision in executor
+                    response_text = await loop.run_in_executor(
+                        None,
+                        gemini_handler.get_vision_response,
+                        formatted_messages,
+                        None,  # image_data is already in messages
+                        system_context,
+                        GEMINI_MODELS.get("vision")
+                    )
+                    
+                    print(f"Gemini vision response: {response_text[:200]}...")
+                    
+                    # Apply platform constraints
+                    platform = user_state.get('platform', 'discord')
+                    settings = PLATFORM_SETTINGS[platform]
+                    
+                    if len(response_text) > settings['max_message_length']:
+                        response_text = response_text[:settings['max_message_length'] - 3] + "..."
+                    
+                    return response_text
+                    
+                except Exception as e:
+                    print(f"Gemini Vision API error: {e}")
+                    # No fallback - return error response directly  
+                    from config import ERROR_RESPONSES
+                    import random
+                    return random.choice(ERROR_RESPONSES)
+            
+            if provider == "openrouter":
+                print(f"\n=== USING OPENROUTER VISION API ===")
+                print(f"Model: {VISION_MODEL}")
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
+                        print(f"\n=== VISION API RESPONSE ===")
+                        print(f"Status: {response.status}")
                     
                     if response.status == 200:
                         data = await response.json()
@@ -1685,9 +1842,66 @@ For normal conversation, just respond normally without the JSON format."""}
 
             print(f"Updating summaries for {user_state.get('username', 'unknown')} - {len(messages)} messages")
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.base_url, headers=self.summary_headers, json=prompt) as response:
-                    print(f"API Status: {response.status}")
+            # Route to appropriate API based on config
+            provider = API_PROVIDER.get("summary", "openrouter")
+            
+            if provider == "gemini" and GEMINI_AVAILABLE:
+                print(f"\n=== USING GEMINI SUMMARY API ===")
+                print(f"Model: {GEMINI_MODELS.get('summary')}")
+                
+                try:
+                    # Convert to sync call for Gemini
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    
+                    # Prepare the summary text
+                    summary_text = SUMMARY_UPDATE_PROMPT.format(
+                        current_relationship=user_state['summaries']['relationship'],
+                        current_conversation=user_state['summaries']['last_conversation'],
+                        formatted_messages=formatted_messages
+                    )
+                    
+                    # Call Gemini summary in executor
+                    response_text = await loop.run_in_executor(
+                        None,
+                        gemini_handler.get_summary_response,
+                        summary_text,
+                        GEMINI_MODELS.get("summary")
+                    )
+                    
+                    print(f"Gemini summary response: {response_text[:200]}...")
+                    
+                    # Parse the summary response
+                    lines = response_text.strip().split('\n')
+                    relationship_summary = ""
+                    conversation_summary = ""
+                    
+                    for i, line in enumerate(lines):
+                        if "RELATIONSHIP:" in line:
+                            relationship_summary = line.replace("RELATIONSHIP:", "").strip()
+                        elif "CONVERSATION:" in line:
+                            conversation_summary = line.replace("CONVERSATION:", "").strip()
+                    
+                    if not relationship_summary:
+                        relationship_summary = user_state['summaries']['relationship']
+                    if not conversation_summary:
+                        conversation_summary = user_state['summaries']['last_conversation']
+                    
+                    print(f"Updated summaries successfully")
+                    return relationship_summary, conversation_summary, True
+                    
+                except Exception as e:
+                    print(f"Gemini Summary API error: {e}")
+                    # No fallback - return default summaries
+                    return user_state['summaries']['relationship'], user_state['summaries']['last_conversation'], False
+            
+            if provider == "openrouter":
+                print(f"\n=== USING OPENROUTER SUMMARY API ===")
+                print(f"Model: {SUMMARY_MODEL}")
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.base_url, headers=self.summary_headers, json=prompt) as response:
+                        print(f"API Status: {response.status}")
                     
                     if response.status != 200:
                         print(f"Summary API error: {response.status}")

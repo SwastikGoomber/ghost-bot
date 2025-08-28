@@ -81,11 +81,15 @@ class LogManager:
 
     def is_enabled(self) -> bool:
         """Check if the LogManager is fully initialized and operational."""
+        from config import CAPTAINS_LOG_ENABLED
+        
         initialized = self._initialized
         db_client = self.db_client is not None
         local_embedder = self.local_embedder is not None
-        print(f"[DEBUG] LogManager.is_enabled() check: _initialized={initialized}, db_client={db_client}, local_embedder={local_embedder}")
-        return initialized and db_client and local_embedder
+        config_enabled = CAPTAINS_LOG_ENABLED
+        
+        print(f"[DEBUG] LogManager.is_enabled() check: _initialized={initialized}, db_client={db_client}, local_embedder={local_embedder}, config_enabled={config_enabled}")
+        return initialized and db_client and local_embedder and config_enabled
 
     async def get_relevant_logs(self, query: str, limit: int = 5) -> List[str]:
         """

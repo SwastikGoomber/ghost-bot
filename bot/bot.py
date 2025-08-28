@@ -45,6 +45,12 @@ class CustomBot(commands.Bot):
         """
         # Ensure the bot is ready before running the task
         await self.wait_until_ready()
+        
+        # Check if auto processing is still enabled
+        if not CAPTAINS_LOG_AUTO_PROCESSING:
+            print("⚠️ Auto log processing disabled - skipping this cycle")
+            return
+            
         await self.log_manager.fetch_and_process_new_logs()
 
     def extract_image_urls(self, message):
@@ -68,8 +74,12 @@ class CustomBot(commands.Bot):
         # Initialize the LogManager
         await self.log_manager.initialize()
 
-        # Start the background task to check for new logs
-        self.check_logs_task.start()
+        # Start the background task to check for new logs (if enabled)
+        if CAPTAINS_LOG_AUTO_PROCESSING:
+            self.check_logs_task.start()
+            print("✅ Automatic log processing enabled - background task started")
+        else:
+            print("⚠️ Automatic log processing disabled - no background task started")
 
         # Register commands
         @self.tree.command(name="limits", description="Check remaining API limits and bot's state")

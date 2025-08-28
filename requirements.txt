@@ -25,5 +25,6 @@ psutil>=5.9.0
 
 # AI & Embeddings
 google-generativeai
+google-genai  # For new Gemini API
 sentence-transformers
 numpy
