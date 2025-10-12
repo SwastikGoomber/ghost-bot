@@ -338,7 +338,6 @@ CONE_EFFECTS = {
     'oni': transform_censor,  # Alias
     'dyslexia': transform_dyslexia,
     'dickslexia': transform_dyslexia,  # Alias
-    'ro': transform_dyslexia,  # Alias
 }
 
 def apply_cone_effect(text: str, effect_name: str) -> str:

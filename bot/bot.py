@@ -254,7 +254,7 @@ class CustomBot(commands.Bot):
                                'brainrot', 'corporate', 'scrum', 'caveman', 'unga', 'drunk', 'drunkard', 
                                'emoji', 'linkedin', 'existential', 'crisis', 'polite', 'canadian', 
                                'conspiracy', 'vsauce', 'british', 'bri', 'censor', 'oni', 'dyslexia', 
-                               'dickslexia', 'ro']
+                               'dickslexia'] 
                 
                 if effect.lower() not in valid_effects:
                     await interaction.response.send_message(f"❌ Invalid effect. Available: {', '.join(valid_effects)}", ephemeral=True)

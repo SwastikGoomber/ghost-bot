@@ -37,10 +37,7 @@ class GeminiHandler:
                         "effect": {
                             "type": "string",
                             "description": "The cone effect to apply",
-                            "enum": ["uwu", "pirate", "shakespeare", "corporate", "caveman", 
-                                   "valley", "baby", "yoda", "aussie", "scottish", "southern",
-                                   "slayspeak", "brainrot", "scrum", "linkedin", "crisis",
-                                   "canadian", "vsauce", "british", "oni", "dyslexia"]
+                            "enum": ["uwu", "pirate", "shakespeare", "corporate", "caveman", "valley", "baby", "yoda", "aussie", "scottish", "southern", "slayspeak", "brainrot", "scrum", "linkedin", "crisis", "canadian", "vsauce", "british", "oni", "dyslexia"]
                         },
                         "duration": {
                             "type": "string",

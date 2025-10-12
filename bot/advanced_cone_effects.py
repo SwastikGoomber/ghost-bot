@@ -1813,7 +1813,6 @@ def apply_cone_effect(text: str, effect: str) -> str:
         'censor': processor.apply_oni,  # alias
         'dyslexia': processor.apply_dyslexia,
         'dickslexia': processor.apply_dyslexia,  # alias
-        'ro': processor.apply_dyslexia  # alias
     }
     
     if effect.lower() in effect_map:
