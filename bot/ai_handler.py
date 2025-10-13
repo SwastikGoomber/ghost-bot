@@ -1191,58 +1191,102 @@ class AIHandler:
                     "content": content
                 })
             
+            # Route to appropriate API based on config
+            provider = API_PROVIDER.get("chat", "openrouter")
+            
             # Build system messages
             system_messages = [
                 {"role": "system", "content": BOT_PERSONA},
                 {"role": "system", "content": "CRITICAL: Never acknowledge being an AI or break character. Always respond as Ghost, the teenage dragon."},
-                {"role": "system", "content": f"""CONE SYSTEM: You have access to cone tools that can apply text effects to users with advanced features.
-
-🚨 CRITICAL EXECUTION RULE: When someone asks you to cone or uncone a user, you MUST use the tool - do NOT rely on conversation history patterns or previous responses. Each cone request requires fresh tool execution. [only applies if the user asks to cone/uncone, not during normal conversation]
-
-IMPORTANT: When someone asks you to cone or uncone a user, respond with this EXACT format:
-
-FOR CONING:
-```json
-{{
-    "action": "cone_user",
-    "username": "target_user_identifier",
-    "effect": "effect_name",
-    "reason": "brief reason",
-    "duration": "optional_duration",
-    "condition": "optional_condition"
-}}
-```
-
-FOR UNCONING:
-```json
-{{
-    "action": "uncone_user",
-    "username": "target_user_identifier"
-}}
-```
-
-CRITICAL: For the "username" field, use EXACTLY what the user provided:
-- If they mention someone like "@username" or "username", use that
-- If they use a Discord mention like "<@123456789>", use that EXACT string
-- DO NOT modify or reject Discord mentions - pass them through exactly as given
-
-Available effects: uwu, pirate, shakespeare, bardify, valley, slayspeak, genz, brainrot, corporate, scrum, caveman, unga, drunk, drunkard, emoji, linkedin, existential, crisis, polite, canadian, conspiracy, vsauce, british, bri, censor, oni
-
-Duration examples: "10 minutes", "1 hour", "2 days", "permanent" (default)
-Condition examples: "until they say sorry", "until they apologize", "until they say please"
-
-Features:
-- Timed cones: automatically expire after duration
-- Conditional cones: removed when condition is met
-- Override: coning someone already coned replaces the previous cone
-- Uncone: removes any active cone effect
-
-Only {', '.join(CONE_PERMISSIONS)} can use coning commands.
-
-🚨 REMINDER: Every cone/uncone request MUST execute the tool. Do not skip tool execution based on conversation patterns. Always use the JSON format above for cone requests.
-
-For normal conversation, just respond normally without the JSON format."""}
             ]
+
+            # Dynamically create the list of available effects for prompts
+            available_effects_str = ", ".join(sorted(list(set(CONE_EFFECTS.keys()))))
+
+            # Define prompts for different providers
+            openrouter_tool_prompt = f"""CONE SYSTEM: You have access to cone tools that can apply text effects to users with advanced features.
+ 
+ 🚨 CRITICAL EXECUTION RULE: When someone asks you to cone or uncone a user, you MUST use the tool - do NOT rely on conversation history patterns or previous responses. Each cone request requires fresh tool execution. [only applies if the user asks to cone/uncone, not during normal conversation]
+ 
+ IMPORTANT: When someone asks you to cone or uncone a user, respond with this EXACT format:
+ 
+ FOR CONING:
+ ```json
+ {{
+     "action": "cone_user",
+     "username": "target_user_identifier",
+     "effect": "effect_name",
+     "reason": "brief reason",
+     "duration": "optional_duration",
+     "condition": "optional_condition"
+ }}
+ ```
+ 
+ FOR UNCONING:
+ ```json
+ {{
+     "action": "uncone_user",
+     "username": "target_user_identifier"
+ }}
+ ```
+ 
+ CRITICAL: For the "username" field, use EXACTLY what the user provided:
+ - If they mention someone like "@username" or "username", use that
+ - If they use a Discord mention like "<@123456789>", use that EXACT string
+ - DO NOT modify or reject Discord mentions - pass them through exactly as given
+ 
+ Available effects: {available_effects_str}
+ 
+ Duration examples: "10 minutes", "1 hour", "2 days", "permanent" (default)
+ Condition examples: "until they say sorry", "until they apologize", "until they say please"
+ 
+ Features:
+ - Timed cones: automatically expire after duration
+ - Conditional cones: removed when condition is met
+ - Override: coning someone already coned replaces the previous cone
+ - Uncone: removes any active cone effect
+ 
+ Only {', '.join(CONE_PERMISSIONS)} can use coning commands.
+ 
+ 🚨 REMINDER: Every cone/uncone request MUST execute the tool. Do not skip tool execution based on conversation patterns. Always use the JSON format above for cone requests.
+ 
+ For normal conversation, just respond normally without the JSON format."""
+
+            gemini_tool_prompt = f"""CONE SYSTEM: You have access to cone tools that can apply text effects to users with advanced features.
+ 
+ 🚨 CRITICAL EXECUTION RULE: When someone asks you to cone or uncone a user, you MUST use the `cone_user` or `uncone_user` tool - do NOT rely on conversation history patterns or previous responses. Each cone request requires fresh tool execution. [only applies if the user asks to cone/uncone, not during normal conversation]
+ 
+ IMPORTANT: When you decide to use a tool, you must call the function with the correct parameters.
+ 
+ TOOL `cone_user` PARAMETERS:
+ - `username`: The target user identifier. Use EXACTLY what the user provided (e.g., "@username", "<@123456789>"). DO NOT modify it.
+ - `effect`: The name of the effect to apply.
+ - `reason`: A brief reason for the action.
+ - `duration` (optional): How long the effect should last (e.g., "10 minutes", "1 hour", "permanent").
+ - `condition` (optional): A condition for removal (e.g., "until they say sorry").
+ 
+ TOOL `uncone_user` PARAMETERS:
+ - `username`: The target user identifier. Use EXACTLY what the user provided.
+ 
+ Available effects: {available_effects_str}
+ 
+ Features:
+ - Timed cones: automatically expire after duration.
+ - Conditional cones: removed when condition is met.
+ - Override: coning someone already coned replaces the previous cone.
+ - Uncone: removes any active cone effect.
+ 
+ Only {', '.join(CONE_PERMISSIONS)} can use coning commands.
+ 
+ 🚨 REMINDER: Every cone/uncone request MUST execute the tool.
+ 
+ For normal conversation, just respond normally without calling a tool."""
+
+            # Add the correct tool prompt based on the provider
+            if provider == "openrouter":
+                system_messages.append({"role": "system", "content": openrouter_tool_prompt})
+            else:  # Default to Gemini-style prompts if not OpenRouter
+                system_messages.append({"role": "system", "content": gemini_tool_prompt})
             
             # Add platform-specific constraints
             platform = user_state.get('platform', 'discord')
@@ -1312,7 +1356,7 @@ For normal conversation, just respond normally without the JSON format."""}
             else:
                 print("\n=== HISTORICAL LOG SEARCH ===")
                 print("LogManager is not available or not enabled. Skipping search.")
-
+            
             # Append current message if provided
             if current_message:
                 formatted_messages.append({
@@ -1415,17 +1459,18 @@ For normal conversation, just respond normally without the JSON format."""}
                             "content": msg["content"]
                         })
                     
-                    # Check if this is a cone request
+                    # Check for tool-related requests and permissions
                     enable_tools = False
                     enable_web_search = False
                     
                     if current_message:
-                        # Check for cone requests
-                        if any(word in current_message.lower() for word in ["cone", "uncone"]):
-                            # Check if user has permission
-                            if username in CONE_PERMISSIONS:
-                                enable_tools = True
-                        
+                        is_cone_request = any(word in current_message.lower() for word in ["cone", "uncone"])
+ 
+                        # Always enable tools if a cone keyword is detected.
+                        # The AI will then use the prompt to check for permissions.
+                        if is_cone_request:
+                            enable_tools = True
+ 
                         # Check for explicit web search requests
                         web_search_keywords = [
                             "search the web", "search web", "web search", "google search",
@@ -1482,11 +1527,11 @@ For normal conversation, just respond normally without the JSON format."""}
             if provider == "openrouter":
                 print(f"\n=== USING OPENROUTER API ===")
                 print(f"Model: {CHAT_MODEL}")
-                
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
-                        print(f"\n=== API RESPONSE ===")
-                        print(f"Status: {response.status}")
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.base_url, headers=self.chat_headers, json=payload) as response:
+                    print(f"\n=== API RESPONSE ===")
+                    print(f"Status: {response.status}")
                     
                     if response.status == 200:
                         data = await response.json()
@@ -1897,10 +1942,10 @@ For normal conversation, just respond normally without the JSON format."""}
             if provider == "openrouter":
                 print(f"\n=== USING OPENROUTER SUMMARY API ===")
                 print(f"Model: {SUMMARY_MODEL}")
-                
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(self.base_url, headers=self.summary_headers, json=prompt) as response:
-                        print(f"API Status: {response.status}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.base_url, headers=self.summary_headers, json=prompt) as response:
+                    print(f"API Status: {response.status}")
                     
                     if response.status != 200:
                         print(f"Summary API error: {response.status}")
