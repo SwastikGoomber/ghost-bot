@@ -10,7 +10,6 @@ pymongo[srv]>=4.6.0  # MongoDB with DNS SRV support
 spacy>=3.4.0,<4.0.0
 nltk>=3.8.0
 textblob>=0.17.0  # Simple NLP tasks and sentiment
-pattern
 
 # Deployment and Web
 fastapi>=0.95.0
@@ -26,5 +25,8 @@ psutil>=5.9.0
 # AI & Embeddings
 google-generativeai
 google-genai  # For new Gemini API
+# Install CPU-only PyTorch first to avoid CUDA dependencies (saves 3+ GB)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0
 sentence-transformers
 numpy

@@ -48,7 +48,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GEMINI_MODELS = {
     "chat": "gemini-2.5-flash-lite",     # 15 RPM, 1000 req/day
     "vision": "gemini-2.0-flash",        # 15 RPM, 200 req/day (multimodal)
-    "summary": "gemini-2.5-flash-lite",  # Most requests, needs high quota
+    "summary": "gemini-2.5-flash-lite",  # 15 RPM, 1000 req/day
 }
 
 # Cone System Configuration
