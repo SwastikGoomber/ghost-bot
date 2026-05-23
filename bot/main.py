@@ -9,8 +9,10 @@ Initialisation order:
     5. Load persistent state (user states, cone data)
     6. Load special users
     7. Build shared objects (StateManager, ConeManager, ContextBuilder)
-    8. Start Discord and Twitch bots concurrently
-    9. Graceful shutdown on SIGINT / SIGTERM
+    8. Build RAG scheduler (if rag.enabled) and attach to Discord bot
+    9. Start Discord and Twitch bots concurrently
+    10. Discord on_ready starts the scheduler once the bot is live
+    11. Graceful shutdown on SIGINT / SIGTERM
 """
 
 from __future__ import annotations
@@ -32,10 +34,12 @@ from .utils.config import get_config
 from .utils.exceptions import ConfigError, DatabaseError
 from .memory import db as mongo
 from .memory.state import StateManager
+from .memory.rag import create_indexes as rag_create_indexes
 from .cone.manager import ConeManager
 from .pipeline.context import ContextBuilder
 from .platforms.discord_bot import GhostDiscordBot
 from .platforms.twitch_bot import GhostTwitchBot
+from .jobs.scheduler import RAGScheduler
 
 # Set up logging before anything else
 setup_logging()
@@ -57,8 +61,8 @@ signal.signal(signal.SIGTERM, _handle_signal)
 # Initialisation
 # ---------------------------------------------------------------------------
 
-async def _initialise() -> tuple[GhostDiscordBot, GhostTwitchBot]:
-    """Build and wire all shared components. Returns the two bot instances."""
+async def _initialise() -> tuple[GhostDiscordBot, GhostTwitchBot, Optional[RAGScheduler]]:
+    """Build and wire all shared components. Returns the two bot instances and optional scheduler."""
 
     # Config
     logger.info("Loading configuration...")
@@ -77,6 +81,10 @@ async def _initialise() -> tuple[GhostDiscordBot, GhostTwitchBot]:
     if os.environ.get("MONGODB_URI"):
         logger.info("Connecting to MongoDB...")
         await mongo.connect()
+        # Create RAG collection indexes (idempotent)
+        if cfg.rag.enabled:
+            logger.info("Creating RAG collection indexes...")
+            await rag_create_indexes()
 
     # State manager + load persistent state
     logger.info("Initialising state manager...")
@@ -95,7 +103,22 @@ async def _initialise() -> tuple[GhostDiscordBot, GhostTwitchBot]:
     discord_bot = GhostDiscordBot(state_manager, cone_manager, context_builder)
     twitch_bot = GhostTwitchBot(state_manager, cone_manager, context_builder)
 
-    return discord_bot, twitch_bot
+    # RAG Scheduler — attach to Discord bot so it starts after on_ready
+    rag_scheduler: Optional[RAGScheduler] = None
+    if cfg.rag.enabled:
+        if not os.environ.get("MONGODB_URI"):
+            logger.warning(
+                "RAG is enabled but MONGODB_URI is not set. "
+                "RAG ingestion requires MongoDB — scheduler will not start."
+            )
+        else:
+            rag_scheduler = RAGScheduler(discord_bot)
+            discord_bot._rag_scheduler = rag_scheduler
+            logger.info("RAG scheduler created. Will start after Discord on_ready.")
+    else:
+        logger.info("RAG is disabled (rag.enabled=false). Scheduler not created.")
+
+    return discord_bot, twitch_bot, rag_scheduler
 
 
 def _assert_env(name: str) -> None:
@@ -110,10 +133,15 @@ def _assert_env(name: str) -> None:
 async def _shutdown(
     discord_bot: Optional[GhostDiscordBot] = None,
     twitch_bot: Optional[GhostTwitchBot] = None,
+    rag_scheduler: Optional[RAGScheduler] = None,
 ) -> None:
     logger.info("Shutting down...")
-    tasks = []
 
+    # Stop scheduler first so no new jobs start during shutdown
+    if rag_scheduler is not None:
+        await rag_scheduler.shutdown()
+
+    tasks = []
     if discord_bot:
         tasks.append(asyncio.create_task(discord_bot.close()))
     if twitch_bot:
@@ -135,9 +163,10 @@ async def _shutdown(
 async def main() -> None:
     discord_bot: Optional[GhostDiscordBot] = None
     twitch_bot: Optional[GhostTwitchBot] = None
+    rag_scheduler: Optional[RAGScheduler] = None
 
     try:
-        discord_bot, twitch_bot = await _initialise()
+        discord_bot, twitch_bot, rag_scheduler = await _initialise()
 
         discord_token = os.environ["DISCORD_TOKEN"]
         twitch_token = os.environ.get("TWITCH_TOKEN")
@@ -190,7 +219,7 @@ async def main() -> None:
         logger.critical("Fatal error: %s", exc, exc_info=True)
         raise
     finally:
-        await _shutdown(discord_bot, twitch_bot)
+        await _shutdown(discord_bot, twitch_bot, rag_scheduler)
 
 
 if __name__ == "__main__":

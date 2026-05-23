@@ -86,6 +86,50 @@ class GeminiClient(LLMClient):
             self._handle_exception(exc)
 
     # ------------------------------------------------------------------
+    # JSON generate — structured output mode
+    # ------------------------------------------------------------------
+
+    async def generate_json(
+        self,
+        messages: list[dict],
+        system_prompt: str = "",
+    ) -> str:
+        """
+        Generate a response with response_mime_type="application/json".
+
+        Use this for extraction calls where the output must be valid JSON.
+        The caller is responsible for parsing and validating the returned string.
+
+        Args:
+            messages:      Conversation history (same format as generate()).
+            system_prompt: System context — should specify the expected JSON schema.
+
+        Returns:
+            Raw JSON string from the model.
+
+        Raises:
+            LLMRateLimitError: on 429 / RESOURCE_EXHAUSTED.
+            LLMError:          on any other API failure or empty response.
+        """
+        try:
+            contents = self._build_contents(messages)
+            config = types.GenerateContentConfig(
+                temperature=self._gen_config.temperature,
+                top_p=self._gen_config.top_p,
+                max_output_tokens=self._gen_config.max_output_tokens,
+                system_instruction=system_prompt if system_prompt else None,
+                response_mime_type="application/json",
+            )
+            response = await self._client.aio.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=config,
+            )
+            return self._extract_text(response)
+        except Exception as exc:
+            self._handle_exception(exc)
+
+    # ------------------------------------------------------------------
     # Vision generate — text + images
     # ------------------------------------------------------------------
 

@@ -109,3 +109,39 @@ class ConeResult(BaseModel):
     """Typed return value from every ConeManager operation."""
     success: bool
     message: str
+
+
+# ---------------------------------------------------------------------------
+# RAG retrieval (cross-module boundary types)
+# ---------------------------------------------------------------------------
+
+class RetrievalQuery(BaseModel):
+    """
+    Query passed from the pipeline handler to the RAG retriever.
+
+    The router constructs this after classifying a user message as a lore/history query.
+    Empty lists mean "no filter on this dimension" (match everything).
+    """
+    text: str                               # Original query text, used for embedding
+    doc_types: list[str] = Field(default_factory=list)
+    tags_must_include: list[str] = Field(default_factory=list)
+    individuals_must_include: list[str] = Field(default_factory=list)
+    min_significance: int = 1
+    top_k: int = 5
+
+
+class RetrievedChunk(BaseModel):
+    """
+    A single result returned by the retriever, ready for injection into Ghost's context.
+
+    The `formatted` field is the pre-rendered string that gets appended to the system prompt.
+    """
+    chunk_id: str
+    doc_type: str
+    summary: str
+    tags: list[str]
+    individuals: list[str]
+    significance: int
+    event_date: Optional[str]
+    score: float
+    formatted: str  # Ready-to-inject context string

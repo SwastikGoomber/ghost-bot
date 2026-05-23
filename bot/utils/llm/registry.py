@@ -6,11 +6,13 @@ Feature modules call get_llm_client(role) and get back a configured client —
 they never touch API keys or model names directly.
 
 Roles:
-    "chat"    → GeminiClient (models.chat, chat generation config)
-    "vision"  → GeminiClient (models.vision, vision generation config)
-    "summary" → GeminiClient (models.summary, summary generation config)
-    "router"  → OllamaClient (models.router)   — Phase 3
-    "embed"   → OllamaClient (models.embedder) — Phase 4
+    "chat"          → GeminiClient (models.chat, chat generation config)
+    "vision"        → GeminiClient (models.vision, vision generation config)
+    "summary"       → GeminiClient (models.summary, summary generation config)
+    "extractor"     → GeminiClient (models.extractor, extraction config) — Phase 4 RAG
+    "arc_summarizer"→ GeminiClient (models.arc_summarizer, arc_summary config) — Phase 4 RAG
+    "router"        → OllamaClient (models.router)   — Phase 3
+    "embed"         → OllamaClient (models.embedder) — Phase 4
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ def _get_cached_client(role: str) -> LLMClient:
     from ..config import get_config
     cfg = get_config()
 
-    if role in ("chat", "vision", "summary"):
+    if role in ("chat", "vision", "summary", "extractor", "arc_summarizer"):
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise ConfigError("GEMINI_API_KEY environment variable is not set.")
@@ -49,9 +51,15 @@ def _get_cached_client(role: str) -> LLMClient:
         elif role == "vision":
             gen = cfg.gemini.vision
             model = cfg.models.vision
-        else:  # summary
+        elif role == "summary":
             gen = cfg.gemini.summary
             model = cfg.models.summary
+        elif role == "extractor":
+            gen = cfg.gemini.extraction
+            model = cfg.models.extractor
+        else:  # arc_summarizer
+            gen = cfg.gemini.arc_summary
+            model = cfg.models.arc_summarizer
 
         return GeminiClient(
             api_key=api_key,
@@ -72,5 +80,6 @@ def _get_cached_client(role: str) -> LLMClient:
         return OllamaClient(model=cfg.models.embedder, base_url=ollama_url)
 
     raise ConfigError(
-        f"Unknown LLM role '{role}'. Valid roles: chat, vision, summary, router, embed."
+        f"Unknown LLM role '{role}'. Valid roles: chat, vision, summary, "
+        "extractor, arc_summarizer, router, embed."
     )

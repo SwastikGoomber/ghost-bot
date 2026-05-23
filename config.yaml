@@ -2,8 +2,10 @@ models:
   chat: "gemini-2.5-flash-lite"
   vision: "gemini-2.0-flash"
   summary: "gemini-2.5-flash-lite"
-  router: "gemma4:e4b"        # Phase 3 - Gemma 4 local router via Ollama
-  embedder: "nomic-embed-text" # Phase 4 - local embeddings via Ollama
+  router: "gemma4:e4b"             # Phase 3 - Gemma 4 local router via Ollama
+  embedder: "mxbai-embed-large"    # Phase 4 - local embeddings via Ollama (1024 dimensions)
+  extractor: "gemini-2.5-flash"    # Phase 4 - RAG extraction (needs quality)
+  arc_summarizer: "gemini-2.5-flash" # Phase 4 - arc summary generation
 
 gemini:
   chat:
@@ -18,6 +20,14 @@ gemini:
     temperature: 0.3
     top_p: 0.9
     max_output_tokens: 500
+  extraction:
+    temperature: 0.1   # Low temp for structured JSON output — consistency matters here
+    top_p: 0.9
+    max_output_tokens: 2000
+  arc_summary:
+    temperature: 0.5
+    top_p: 0.9
+    max_output_tokens: 1500
 
 memory:
   message_history_limit: 15
@@ -57,3 +67,29 @@ discord:
 
 twitch:
   max_message_length: 500
+
+rag:
+  enabled: false                # Set to true once Ollama + nomic-embed-text is running
+  enabled_channel_ids: []       # Add Discord channel IDs to ingest here
+
+  # Ingestion schedule — daily at 6:00 AM IST (00:30 UTC)
+  # APScheduler cron format: second minute hour day month day_of_week
+  extraction_cron: "0 30 0 * * *"
+  extraction_lookback_hours: 24
+
+  # Extraction thresholds
+  min_message_length_words: 5    # Skip messages shorter than this
+  conversation_gap_minutes: 10   # Time gap that splits a segment into two
+
+  # Arc summary triggers (checked after each ingestion run)
+  arc_summary_token_threshold: 4000  # Approx tokens across arc chunks before summarising
+  arc_closure_gap_days: 5            # Days without new chunks before arc is considered closed
+
+  # Retrieval
+  retrieval_top_k: 5
+  vector_weight: 0.6             # Weight for cosine similarity in final score
+  significance_weight: 0.4       # Weight for significance score in final score
+  min_significance_filter: 1     # Exclude chunks below this significance
+
+  # Suggested tag review queue (MongoDB collection name)
+  suggested_tag_collection: "rag_suggested_tags"

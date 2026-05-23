@@ -74,6 +74,10 @@ class GhostDiscordBot(commands.Bot):
         self._minute_requests: deque[datetime] = deque(maxlen=cfg.bot.minute_request_limit)
         self._nap_until: Optional[datetime] = None
 
+        # Optional RAG scheduler — set by main.py after construction
+        # Kept as Any to avoid importing jobs package from platforms package
+        self._rag_scheduler: Optional[object] = None
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -85,6 +89,8 @@ class GhostDiscordBot(commands.Bot):
 
     async def on_ready(self) -> None:
         logger.info("Discord bot ready: %s (ID: %s)", self.user, self.user.id)
+        if self._rag_scheduler is not None:
+            self._rag_scheduler.start()
 
     # ------------------------------------------------------------------
     # Message handling

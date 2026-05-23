@@ -33,6 +33,8 @@ class ModelsConfig:
     summary: str = "gemini-2.5-flash-lite"
     router: str = "gemma4:e4b"
     embedder: str = "nomic-embed-text"
+    extractor: str = "gemini-2.5-flash"
+    arc_summarizer: str = "gemini-2.5-flash"
 
 
 @dataclass
@@ -47,6 +49,8 @@ class GeminiConfig:
     chat: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.9, top_p=0.7, max_output_tokens=1000))
     vision: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.7, top_p=0.8, max_output_tokens=500))
     summary: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.3, top_p=0.9, max_output_tokens=500))
+    extraction: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.1, top_p=0.9, max_output_tokens=2000))
+    arc_summary: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.5, top_p=0.9, max_output_tokens=1500))
 
 
 @dataclass
@@ -84,6 +88,23 @@ class TwitchConfig:
 
 
 @dataclass
+class RagConfig:
+    enabled: bool = False
+    enabled_channel_ids: list[int] = field(default_factory=list)
+    extraction_cron: str = "0 30 0 * * *"
+    extraction_lookback_hours: int = 24
+    min_message_length_words: int = 5
+    conversation_gap_minutes: int = 10
+    arc_summary_token_threshold: int = 4000
+    arc_closure_gap_days: int = 5
+    retrieval_top_k: int = 5
+    vector_weight: float = 0.6
+    significance_weight: float = 0.4
+    min_significance_filter: int = 1
+    suggested_tag_collection: str = "rag_suggested_tags"
+
+
+@dataclass
 class Config:
     models: ModelsConfig = field(default_factory=ModelsConfig)
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
@@ -92,6 +113,7 @@ class Config:
     bot: BotConfig = field(default_factory=BotConfig)
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     twitch: TwitchConfig = field(default_factory=TwitchConfig)
+    rag: RagConfig = field(default_factory=RagConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -126,17 +148,19 @@ def _load_config() -> Config:
     models = ModelsConfig(**{k: v for k, v in models_raw.items() if hasattr(ModelsConfig, k)}) if models_raw else ModelsConfig()
 
     # --- gemini ---
-    def _gen_cfg(d: dict) -> GeminiGenerationConfig:
+    def _gen_cfg(d: dict, default_temp: float = 0.9, default_max: int = 1000) -> GeminiGenerationConfig:
         return GeminiGenerationConfig(
-            temperature=d.get("temperature", 0.9),
+            temperature=d.get("temperature", default_temp),
             top_p=d.get("top_p", 0.9),
-            max_output_tokens=d.get("max_output_tokens", 1000),
+            max_output_tokens=d.get("max_output_tokens", default_max),
         )
     gemini_raw = raw.get("gemini", {})
     gemini = GeminiConfig(
-        chat=_gen_cfg(gemini_raw.get("chat", {})),
-        vision=_gen_cfg(gemini_raw.get("vision", {})),
-        summary=_gen_cfg(gemini_raw.get("summary", {})),
+        chat=_gen_cfg(gemini_raw.get("chat", {}), default_temp=0.9, default_max=1000),
+        vision=_gen_cfg(gemini_raw.get("vision", {}), default_temp=0.7, default_max=500),
+        summary=_gen_cfg(gemini_raw.get("summary", {}), default_temp=0.3, default_max=500),
+        extraction=_gen_cfg(gemini_raw.get("extraction", {}), default_temp=0.1, default_max=2000),
+        arc_summary=_gen_cfg(gemini_raw.get("arc_summary", {}), default_temp=0.5, default_max=1500),
     )
 
     # --- memory ---
@@ -179,6 +203,24 @@ def _load_config() -> Config:
         max_message_length=twitch_raw.get("max_message_length", 500),
     )
 
+    # --- rag ---
+    rag_raw = raw.get("rag", {})
+    rag = RagConfig(
+        enabled=rag_raw.get("enabled", False),
+        enabled_channel_ids=[int(i) for i in rag_raw.get("enabled_channel_ids", [])],
+        extraction_cron=rag_raw.get("extraction_cron", "0 30 0 * * *"),
+        extraction_lookback_hours=int(rag_raw.get("extraction_lookback_hours", 24)),
+        min_message_length_words=int(rag_raw.get("min_message_length_words", 5)),
+        conversation_gap_minutes=int(rag_raw.get("conversation_gap_minutes", 10)),
+        arc_summary_token_threshold=int(rag_raw.get("arc_summary_token_threshold", 4000)),
+        arc_closure_gap_days=int(rag_raw.get("arc_closure_gap_days", 5)),
+        retrieval_top_k=int(rag_raw.get("retrieval_top_k", 5)),
+        vector_weight=float(rag_raw.get("vector_weight", 0.6)),
+        significance_weight=float(rag_raw.get("significance_weight", 0.4)),
+        min_significance_filter=int(rag_raw.get("min_significance_filter", 1)),
+        suggested_tag_collection=str(rag_raw.get("suggested_tag_collection", "rag_suggested_tags")),
+    )
+
     return Config(
         models=models,
         gemini=gemini,
@@ -187,6 +229,7 @@ def _load_config() -> Config:
         bot=bot,
         discord=discord,
         twitch=twitch,
+        rag=rag,
     )
 
 

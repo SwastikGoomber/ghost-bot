@@ -28,3 +28,21 @@ class LLMClient(ABC):
             The model's text response.
         """
         ...
+
+    async def embed(self, text: str) -> list[float]:
+        """
+        Generate a vector embedding for the given text.
+
+        Only providers that support embeddings need to override this.
+        The default raises NotImplementedError to surface misuse clearly.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            A list of floats representing the embedding vector.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support embeddings. "
+            "Use the OllamaClient with role='embed' for embedding operations."
+        )
