@@ -241,6 +241,7 @@ discord:
 
 twitch:
   max_message_length: 500
+  enable_router: false
   custom_emotes:
     - name: "lilly3smh"
       description: "Disappointed, unimpressed, or shaking-my-head reaction."

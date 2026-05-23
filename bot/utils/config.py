@@ -113,6 +113,7 @@ class DiscordConfig:
 @dataclass
 class TwitchConfig:
     max_message_length: int = 500
+    enable_router: bool = True
     custom_emotes: list[CustomEmoteConfig] = field(default_factory=list)
 
 
@@ -266,6 +267,7 @@ def _load_config() -> Config:
     twitch_raw = raw.get("twitch", {})
     twitch = TwitchConfig(
         max_message_length=twitch_raw.get("max_message_length", 500),
+        enable_router=bool(twitch_raw.get("enable_router", True)),
         custom_emotes=_custom_emotes(twitch_raw.get("custom_emotes", [])),
     )
 

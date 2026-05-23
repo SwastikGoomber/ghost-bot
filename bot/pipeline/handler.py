@@ -136,10 +136,14 @@ async def process_message(
     # ------------------------------------------------------------------
     # 1. Run the intent router (fast local classification)
     # ------------------------------------------------------------------
-    flags = await _router.classify(
-        message,
-        recent_messages=list(user_state.recent_messages[-4:]),
-    )
+    if platform == Platform.TWITCH and not cfg.twitch.enable_router:
+        logger.debug("Bypassing IntentRouter classification for Twitch as configured.")
+        flags = RouterFlags(rag_required=False, cone_relevant=False)
+    else:
+        flags = await _router.classify(
+            message,
+            recent_messages=list(user_state.recent_messages[-4:]),
+        )
     logger.debug("RouterFlags: rag=%s, cone=%s", flags.rag_required, flags.cone_relevant)
 
     # ------------------------------------------------------------------
@@ -460,6 +464,16 @@ async def _handle_cone_call(
 
     # 5. Feed outcome back to Ghost and get a fresh, reactive response
     try:
+        if outcome.status == "applied":
+            system_prompt += (
+                "\n\nCRITICAL CONE ANNOUNCEMENT RULE:\n"
+                "The cone has been successfully applied to the target! You MUST explicitly announce "
+                "the cone details in character in your response. State exactly which effect was applied, "
+                "how long it lasts (the duration, if temporary), or what condition is required to remove it early. "
+                "This ensures everyone in chat knows what got applied, for how long, and how they can get free. "
+                "Keep this announcement completely natural, sassy, and fully in character!"
+            )
+
         response = await chat_client.send_tool_result(
             messages=messages,
             system_prompt=system_prompt,
