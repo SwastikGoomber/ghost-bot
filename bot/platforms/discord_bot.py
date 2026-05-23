@@ -292,6 +292,7 @@ class GhostDiscordBot(commands.Bot):
                 )
                 return
 
+            await interaction.response.defer()
             result = await self._cone.apply(
                 discord_id=str(user.id),
                 effect=effect.lower(),
@@ -299,7 +300,7 @@ class GhostDiscordBot(commands.Bot):
                 duration=duration,
                 condition=condition,
             )
-            await interaction.response.send_message(result.message)
+            await interaction.followup.send(result.message)
 
         @self.tree.command(name="uncone", description="Remove cone effect from a user")
         async def uncone_cmd(
@@ -312,31 +313,34 @@ class GhostDiscordBot(commands.Bot):
                 )
                 return
 
+            await interaction.response.defer()
             result = await self._cone.remove(
                 discord_id=str(user.id),
                 removed_by=interaction.user.name,
             )
-            await interaction.response.send_message(result.message)
+            await interaction.followup.send(result.message)
 
         @self.tree.command(name="link_twitch", description="Link your Discord account with a Twitch account")
         async def link_twitch(interaction: discord.Interaction, twitch_username: str) -> None:
+            await interaction.response.defer()
             success = await self._state.create_link_request(
                 str(interaction.user.id), twitch_username
             )
             if success:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     f"Link request created! Type `!confirm_link` in the Twitch chat to complete."
                 )
             else:
-                await interaction.response.send_message("Failed to create link request.")
+                await interaction.followup.send("Failed to create link request.")
 
         @self.tree.command(name="unlink_accounts", description="Unlink your Discord and Twitch accounts")
         async def unlink_accounts(interaction: discord.Interaction) -> None:
+            await interaction.response.defer()
             success = await self._state.unlink_accounts(f"discord_{interaction.user.id}")
             if success:
-                await interaction.response.send_message("Accounts unlinked successfully.")
+                await interaction.followup.send("Accounts unlinked successfully.")
             else:
-                await interaction.response.send_message("No linked accounts found.")
+                await interaction.followup.send("No linked accounts found.")
 
         @self.tree.command(name="update_summary", description="Force-update your relationship summary")
         async def update_summary(
@@ -378,6 +382,7 @@ class GhostDiscordBot(commands.Bot):
             interaction: discord.Interaction,
             aliases: str,
         ) -> None:
+            await interaction.response.defer(ephemeral=True)
             state, _ = await self._state.get_user_state(
                 user_id=str(interaction.user.id),
                 username=interaction.user.name,
@@ -393,7 +398,7 @@ class GhostDiscordBot(commands.Bot):
             state.name_variants = list(existing)
             await self._state.save_states()
             logger.info("[/ghost set alias] %s set aliases: %s", interaction.user.name, parsed)
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"✓ Aliases updated: {', '.join(parsed)}", ephemeral=True
             )
 
@@ -403,6 +408,7 @@ class GhostDiscordBot(commands.Bot):
             interaction: discord.Interaction,
             pronouns: str,
         ) -> None:
+            await interaction.response.defer(ephemeral=True)
             state, _ = await self._state.get_user_state(
                 user_id=str(interaction.user.id),
                 username=interaction.user.name,
@@ -413,7 +419,7 @@ class GhostDiscordBot(commands.Bot):
             state.pronouns = parsed
             await self._state.save_states()
             logger.info("[/ghost set pronouns] %s set pronouns: %s", interaction.user.name, parsed)
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"✓ Pronouns updated: {', '.join(parsed)}", ephemeral=True
             )
 
@@ -428,6 +434,7 @@ class GhostDiscordBot(commands.Bot):
                     "Bio must be 500 characters or fewer.", ephemeral=True
                 )
                 return
+            await interaction.response.defer(ephemeral=True)
             state, _ = await self._state.get_user_state(
                 user_id=str(interaction.user.id),
                 username=interaction.user.name,
@@ -437,7 +444,7 @@ class GhostDiscordBot(commands.Bot):
             state.bio = bio.strip()
             await self._state.save_states()
             logger.info("[/ghost set bio] %s updated bio.", interaction.user.name)
-            await interaction.response.send_message("✓ Bio updated.", ephemeral=True)
+            await interaction.followup.send("✓ Bio updated.", ephemeral=True)
 
         self.tree.add_command(ghost_group)
 
