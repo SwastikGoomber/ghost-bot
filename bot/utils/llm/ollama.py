@@ -34,11 +34,13 @@ class OllamaClient(LLMClient):
         base_url: str = "http://localhost:11434",
         temperature: float = 0.1,
         num_predict: int = 128,
+        role: str = "",
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.temperature = temperature
         self.num_predict = num_predict
+        self.role = role
 
     # ------------------------------------------------------------------
     # Text generation — /api/chat
@@ -102,6 +104,18 @@ class OllamaClient(LLMClient):
                         data.get("prompt_eval_count", "?"),
                         content[:500],
                     )
+                    try:
+                        from bot.utils.logging import log_llm_call
+                        log_llm_call(
+                            client_name="OllamaClient",
+                            model=self.model,
+                            system_prompt=system_prompt,
+                            messages=messages,
+                            response=content,
+                            extra_info=f"Role: {self.role}",
+                        )
+                    except Exception as exc:
+                        logger.warning("Failed to log Ollama generate call: %s", exc)
                     return content
         except aiohttp.ClientConnectorError as exc:
             raise LLMError(
@@ -180,6 +194,18 @@ class OllamaClient(LLMClient):
                         data.get("eval_count", "?"),
                         content[:500],
                     )
+                    try:
+                        from bot.utils.logging import log_llm_call
+                        log_llm_call(
+                            client_name="OllamaClient",
+                            model=self.model,
+                            system_prompt=system_prompt,
+                            messages=messages,
+                            response=content,
+                            extra_info=f"Role: {self.role} (JSON)",
+                        )
+                    except Exception as exc:
+                        logger.warning("Failed to log Ollama generate_json call: %s", exc)
                     return content
         except aiohttp.ClientConnectorError as exc:
             raise LLMError(

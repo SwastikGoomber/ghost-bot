@@ -94,12 +94,13 @@ def _get_cached_client(role: str) -> LLMClient:
             base_url=ollama_url,
             temperature=gen.temperature,
             num_predict=gen.num_predict,
+            role=role,
         )
 
     if role == "embed":
         # Phase 4 — nomic-embed-large via Ollama
         ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        return OllamaClient(model=cfg.models.embedder, base_url=ollama_url)
+        return OllamaClient(model=cfg.models.embedder, base_url=ollama_url, role=role)
 
     raise ConfigError(
         f"Unknown LLM role '{role}'. Valid roles: chat, vision, summary, "

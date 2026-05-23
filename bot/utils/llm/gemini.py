@@ -177,6 +177,26 @@ class GeminiClient(LLMClient):
     def _is_chat(self) -> bool:
         return self.role in ("chat", "vision")
 
+    async def _get_extra_info(self) -> str:
+        """Helper to collect and format API budget and fallback state for logging."""
+        try:
+            chat_paid, total_paid = await self._tracker.get_daily_usage()
+            exhausted_until = await self._tracker.get_free_exhausted_until()
+            
+            # Determine which key tier is active
+            from datetime import datetime, timezone
+            is_paid = self.preferred_source == "paid" or (
+                exhausted_until is not None and datetime.now(timezone.utc) < exhausted_until
+            )
+            source = "Paid API" if is_paid else "Free API"
+            
+            limits_info = f"Paid calls: chat={chat_paid}, total={total_paid}"
+            if exhausted_until:
+                limits_info += f" | Free exhausted until {exhausted_until}"
+            return f"Role: {self.role} | Source: {source} | {limits_info}"
+        except Exception:
+            return f"Role: {self.role} | Usage tracker metrics unavailable"
+
     async def _check_limits_and_select_client(self, force_paid: bool = False) -> tuple[genai.Client, bool]:
         """
         Determines whether to use the free or paid client.
@@ -310,7 +330,16 @@ class GeminiClient(LLMClient):
                 config=config,
             )
         response = await self._execute_with_retry(_call)
-        return self._extract_text(response)
+        res_text = self._extract_text(response)
+
+        try:
+            from bot.utils.logging import log_llm_call
+            extra = await self._get_extra_info()
+            log_llm_call("GeminiClient", self.model, system_prompt, messages, res_text, extra)
+        except Exception as exc:
+            logger.warning("Failed to log Gemini generate call: %s", exc)
+
+        return res_text
 
     # ------------------------------------------------------------------
     # Tool-calling generate — with initiate_cone tool available
@@ -474,10 +503,24 @@ class GeminiClient(LLMClient):
         # Check if the model called the tool
         cone_ctx = self._extract_cone_call_context(response)
         if cone_ctx is not None:
+            try:
+                from bot.utils.logging import log_llm_call
+                extra = await self._get_extra_info()
+                tool_log = f"[Tool Call] {cone_ctx.call.tool_name}(target='{cone_ctx.call.cone_target}', effect='{cone_ctx.call.cone_effect}', trigger='{cone_ctx.call.cone_trigger}', duration={cone_ctx.call.cone_duration}, condition={cone_ctx.call.cone_condition})"
+                log_llm_call("GeminiClient", self.model, system_prompt, messages, tool_log, extra)
+            except Exception as exc:
+                logger.warning("Failed to log Gemini tool call: %s", exc)
             return cone_ctx, ""
 
         # Plain text response
-        return None, self._extract_text(response)
+        res_text = self._extract_text(response)
+        try:
+            from bot.utils.logging import log_llm_call
+            extra = await self._get_extra_info()
+            log_llm_call("GeminiClient", self.model, system_prompt, messages, res_text, extra)
+        except Exception as exc:
+            logger.warning("Failed to log Gemini plain text generate_with_tools call: %s", exc)
+        return None, res_text
 
     # ------------------------------------------------------------------
     # Tool result follow-up — feed outcome back to Ghost
@@ -553,7 +596,29 @@ class GeminiClient(LLMClient):
             )
 
         response = await self._execute_with_retry(_call)
-        return self._extract_text(response)
+        res_text = self._extract_text(response)
+
+        try:
+            from bot.utils.logging import log_llm_call
+            extra = await self._get_extra_info()
+
+            # Reconstruct detailed messages showing the tool round-trip
+            full_msgs = list(messages)
+            full_msgs.append({"role": "model", "content": f"[Tool Call] {func_name}(...)"})
+            full_msgs.append({"role": "user", "content": f"[Tool Response] {outcome.model_dump(exclude_none=True)}"})
+
+            log_llm_call(
+                "GeminiClient",
+                self.model,
+                system_prompt,
+                full_msgs,
+                res_text,
+                f"{extra} (Tool Result Follow-up)",
+            )
+        except Exception as exc:
+            logger.warning("Failed to log Gemini send_tool_result call: %s", exc)
+
+        return res_text
 
     # ------------------------------------------------------------------
     # JSON generate — structured output mode
@@ -596,7 +661,16 @@ class GeminiClient(LLMClient):
                 config=config,
             )
         response = await self._execute_with_retry(_call)
-        return self._extract_text(response)
+        res_text = self._extract_text(response)
+
+        try:
+            from bot.utils.logging import log_llm_call
+            extra = await self._get_extra_info()
+            log_llm_call("GeminiClient", self.model, system_prompt, messages, res_text, f"{extra} (JSON)")
+        except Exception as exc:
+            logger.warning("Failed to log Gemini generate_json call: %s", exc)
+
+        return res_text
 
     # ------------------------------------------------------------------
     # Vision generate — text + images
@@ -656,7 +730,22 @@ class GeminiClient(LLMClient):
             )
 
         response = await self._execute_with_retry(_call)
-        return self._extract_text(response)
+        res_text = self._extract_text(response)
+
+        try:
+            from bot.utils.logging import log_llm_call
+            extra = await self._get_extra_info()
+            
+            # Reconstruct history messages to include [Image attached: URL]
+            logged_messages = list(messages)
+            for url in image_urls:
+                logged_messages.append({"role": "user", "content": f"[Image attached: {url}]"})
+                
+            log_llm_call("GeminiClient", self.model, system_prompt, logged_messages, res_text, f"{extra} (Vision)")
+        except Exception as exc:
+            logger.warning("Failed to log Gemini generate_with_images call: %s", exc)
+
+        return res_text
 
     # ------------------------------------------------------------------
     # Internals
