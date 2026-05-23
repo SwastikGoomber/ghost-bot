@@ -34,6 +34,21 @@ class Message(BaseModel):
     model_config = {"json_encoders": {datetime: lambda v: v.isoformat()}}
 
 
+class ChannelContextMessage(BaseModel):
+    """
+    Recent ambient channel message passed from a platform adapter to the pipeline.
+
+    This is prompt context only; it is not persisted as user memory.
+    """
+    content: str
+    username: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+    from_bot: bool = False
+    user_id: Optional[str] = None
+
+    model_config = {"json_encoders": {datetime: lambda v: v.isoformat()}}
+
+
 # ---------------------------------------------------------------------------
 # User identity / state
 # ---------------------------------------------------------------------------

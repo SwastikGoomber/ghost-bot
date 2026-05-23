@@ -27,7 +27,14 @@ from ..utils.config import get_config
 from ..utils.exceptions import LLMRateLimitError, LLMError, ConeEffectNotFoundError
 from ..utils.llm import get_llm_client
 from ..utils.llm.gemini import GeminiClient, ConeCallContext
-from ..utils.models import ConeOutcome, Platform, RetrievedChunk, TaxonomySnapshot, UserState
+from ..utils.models import (
+    ChannelContextMessage,
+    ConeOutcome,
+    Platform,
+    RetrievedChunk,
+    TaxonomySnapshot,
+    UserState,
+)
 from ..memory.state import StateManager
 from ..memory.rag import retrieve, format_for_injection
 from ..cone import apply_effect
@@ -103,6 +110,8 @@ async def process_message(
     context_builder: ContextBuilder,
     cone_manager=None,
     image_urls: Optional[list[str]] = None,
+    channel_context: Optional[list[ChannelContextMessage]] = None,
+    reply_context: Optional[ChannelContextMessage] = None,
 ) -> str:
     """
     Orchestrate a complete message → response cycle.
@@ -115,6 +124,8 @@ async def process_message(
         context_builder:  Pre-built ContextBuilder instance.
         cone_manager:     Active ConeManager instance (required for cone flow).
         image_urls:       Optional list of image attachment URLs (Discord only).
+        channel_context:  Recent ambient messages from the current channel.
+        reply_context:    Message being replied to, if any.
 
     Returns:
         A response string, already capped to the platform's max message length.
@@ -151,6 +162,11 @@ async def process_message(
         message, exclude_discord_id=sender_discord_id or None
     ):
         mentioned_discord_ids.add(discord_id)
+
+    if reply_context and reply_context.user_id:
+        discord_id = state_manager.find_discord_id_by_username(reply_context.user_id)
+        if discord_id and discord_id != sender_discord_id:
+            mentioned_discord_ids.add(discord_id)
 
     # Build (display_name, UserState) pairs, deduped by object identity
     mentioned_states: list[tuple[str, UserState]] = []
@@ -202,6 +218,8 @@ async def process_message(
         mentioned_user_states=mentioned_states if mentioned_states else None,
         rag_context=rag_context or None,
         cone_requested=flags.cone_relevant,
+        channel_context=channel_context,
+        reply_context=reply_context,
     )
 
     # ------------------------------------------------------------------

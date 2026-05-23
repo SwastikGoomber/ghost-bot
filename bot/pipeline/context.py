@@ -13,7 +13,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from ..utils.models import Platform, UserState
+from ..utils.config import get_config
+from ..utils.models import ChannelContextMessage, Platform, UserState
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,13 @@ _cone_hint_cache: Optional[str] = None
 _cone_hint_repetition_cache: Optional[str] = None
 _platform_twitch_cache: Optional[str] = None
 _pronouns_cache: Optional[str] = None
+_discord_channel_context_cache: Optional[str] = None
+_custom_emotes_template_cache: Optional[str] = None
 
 
 def _load_prompt(filename: str, cache_attr: str) -> str:
     """Generic cached prompt loader from prompts/ directory."""
-    global _anti_repetition_template_cache, _cone_hint_cache, _cone_hint_repetition_cache, _platform_twitch_cache, _pronouns_cache
+    global _anti_repetition_template_cache, _cone_hint_cache, _cone_hint_repetition_cache, _platform_twitch_cache, _pronouns_cache, _discord_channel_context_cache, _custom_emotes_template_cache
     candidates = [
         Path(f"prompts/{filename}"),
         Path(__file__).resolve().parents[2] / "prompts" / filename,
@@ -86,6 +89,26 @@ def _load_pronouns() -> str:
     return _pronouns_cache
 
 
+def _load_discord_channel_context() -> str:
+    global _discord_channel_context_cache
+    if _discord_channel_context_cache is None:
+        _discord_channel_context_cache = _load_prompt(
+            "discord_channel_context.md",
+            "_discord_channel_context_cache",
+        )
+    return _discord_channel_context_cache
+
+
+def _load_custom_emotes_template() -> str:
+    global _custom_emotes_template_cache
+    if _custom_emotes_template_cache is None:
+        _custom_emotes_template_cache = _load_prompt(
+            "custom_emotes.md",
+            "_custom_emotes_template_cache",
+        )
+    return _custom_emotes_template_cache
+
+
 # ---------------------------------------------------------------------------
 # Context builder
 # ---------------------------------------------------------------------------
@@ -109,6 +132,8 @@ class ContextBuilder:
         mentioned_user_states: Optional[list[tuple[str, UserState]]] = None,
         rag_context: Optional[str] = None,
         cone_requested: bool = False,
+        channel_context: Optional[list[ChannelContextMessage]] = None,
+        reply_context: Optional[ChannelContextMessage] = None,
     ) -> str:
         """
         Assemble the full system prompt.
@@ -120,6 +145,8 @@ class ContextBuilder:
             mentioned_user_states: [(username, UserState), …] for users mentioned in the message.
             rag_context:           Pre-formatted retrieved memory block (from RAG retriever).
             cone_requested:        True if the router detected an explicit cone request.
+            channel_context:       Recent ambient messages from the current Discord channel.
+            reply_context:         Message being replied to, if any.
 
         Returns:
             A single system prompt string ready to pass to LLMClient.generate().
@@ -132,6 +159,10 @@ class ContextBuilder:
         # 2. Platform constraint
         if platform == Platform.TWITCH:
             parts.append(_load_platform_twitch())
+
+        emote_context = self._build_custom_emotes_context(platform)
+        if emote_context:
+            parts.append(emote_context)
 
         # 4. Sender context
         sender_username = user_state.primary_identity.username.lower()
@@ -147,18 +178,25 @@ class ContextBuilder:
         # 6. Pronoun handling
         parts.append(_load_pronouns())
 
-        # 7. Recent conversation summary for the sender
+        # 7. Discord ambient channel / reply context
+        if platform == Platform.DISCORD and (channel_context or reply_context):
+            parts.append(self._format_discord_channel_context(
+                channel_context=channel_context or [],
+                reply_context=reply_context,
+            ))
+
+        # 8. Recent conversation summary for the sender
         if user_state.summaries.last_conversation and \
                 user_state.summaries.last_conversation != "No conversation summary yet":
             parts.append(
                 f"RECENT CONVERSATION CONTEXT: {user_state.summaries.last_conversation}"
             )
 
-        # 8. RAG retrieved memory (if available)
+        # 9. RAG retrieved memory (if available)
         if rag_context:
             parts.append(rag_context)
 
-        # 9. Global anti-repetition guard — fires on every turn when Ghost has
+        # 10. Global anti-repetition guard — fires on every turn when Ghost has
         #    said 2+ things recently. Prevents phrase loops even on plain chat.
         recent_bot = [
             msg.content for msg in user_state.recent_messages
@@ -169,7 +207,7 @@ class ContextBuilder:
             template = _load_anti_repetition_template()
             parts.append(template.replace("{recent_messages}", recent_lines))
 
-        # 10. Cone request hint + cone-response variety reminder
+        # 11. Cone request hint + cone-response variety reminder
         if cone_requested:
             parts.append(_load_cone_hint())
             if recent_bot:
@@ -221,6 +259,47 @@ class ContextBuilder:
                     lines.append(f"  {speaker}: {msg.content}")
 
         return "\n".join(lines)
+
+    def _format_discord_channel_context(
+        self,
+        *,
+        channel_context: list[ChannelContextMessage],
+        reply_context: Optional[ChannelContextMessage],
+    ) -> str:
+        lines: list[str] = [_load_discord_channel_context()]
+
+        if reply_context:
+            lines.append("REPLY CONTEXT:")
+            lines.append(self._format_channel_context_line(reply_context))
+
+        if channel_context:
+            lines.append("RECENT CHANNEL MESSAGES:")
+            for msg in channel_context:
+                lines.append(self._format_channel_context_line(msg))
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_channel_context_line(msg: ChannelContextMessage) -> str:
+        timestamp = msg.timestamp.strftime("%H:%M")
+        return f"[{timestamp}] {msg.username}: {msg.content}"
+
+    def _build_custom_emotes_context(self, platform: Platform) -> str:
+        cfg = get_config()
+        emotes = (
+            cfg.discord.custom_emotes
+            if platform == Platform.DISCORD
+            else cfg.twitch.custom_emotes
+        )
+        if not emotes:
+            return ""
+
+        lines: list[str] = []
+        for emote in emotes:
+            visual = f" Visual: {emote.emote_visual}" if emote.emote_visual else ""
+            lines.append(f"- {emote.name}: {emote.description}{visual}")
+
+        return _load_custom_emotes_template().replace("{emotes}", "\n".join(lines))
 
     def extract_mentioned_usernames(self, message: str) -> list[str]:
         """

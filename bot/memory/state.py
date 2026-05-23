@@ -551,6 +551,9 @@ class StateManager:
 
         username_lower = username.lower()
 
+        if username_lower.isdigit() and f"discord_{username_lower}" in self._users:
+            return username_lower
+
         # --- Pass 1: exact field match ---
         for state in self._users.values():
             for identity in state.identifiers.values():

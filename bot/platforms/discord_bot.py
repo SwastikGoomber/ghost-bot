@@ -27,7 +27,7 @@ import discord
 from discord.ext import commands, tasks
 
 from ..utils.config import get_config
-from ..utils.models import Platform
+from ..utils.models import ChannelContextMessage, Platform
 from ..memory.state import StateManager
 from ..cone.manager import ConeManager
 from ..pipeline.context import ContextBuilder
@@ -67,6 +67,8 @@ class GhostDiscordBot(commands.Bot):
         # Kept as Any to avoid importing jobs package from platforms package
         self._rag_scheduler: Optional[object] = None
 
+        self._channel_context: dict[int, deque[ChannelContextMessage]] = {}
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -98,6 +100,8 @@ class GhostDiscordBot(commands.Bot):
         cfg = self._cfg
         platform_key = f"discord_{message.author.id}"
         user_discord_id = str(message.author.id)
+        channel_context = self._get_channel_context(message.channel.id)
+        self._record_channel_message(message)
 
         # ------------------------------------------------------------------
         # Prefix commands (!update_summary etc.) — handled before anything else
@@ -189,6 +193,7 @@ class GhostDiscordBot(commands.Bot):
         # ------------------------------------------------------------------
         # Get response from pipeline
         # ------------------------------------------------------------------
+        reply_context = await self._get_reply_context(message)
         async with message.channel.typing():
             response = await process_message(
                 platform=Platform.DISCORD,
@@ -198,6 +203,8 @@ class GhostDiscordBot(commands.Bot):
                 context_builder=self._ctx_builder,
                 cone_manager=self._cone,
                 image_urls=image_urls or None,
+                channel_context=channel_context,
+                reply_context=reply_context,
             )
 
         # ------------------------------------------------------------------
@@ -218,11 +225,78 @@ class GhostDiscordBot(commands.Bot):
         # Send response
         # ------------------------------------------------------------------
         if message_was_deleted:
-            await message.channel.send(f"{message.author.mention} {response}")
+            sent_message = await message.channel.send(f"{message.author.mention} {response}")
+            self._record_channel_message(sent_message)
         else:
-            await message.reply(response)
+            sent_message = await message.reply(response)
+            self._record_channel_message(sent_message)
 
         self._record_request()
+
+    def _get_channel_context(self, channel_id: int) -> list[ChannelContextMessage]:
+        """Return the current rolling context window for a Discord channel."""
+        return list(self._channel_context.get(channel_id, ()))
+
+    def _record_channel_message(self, message: discord.Message) -> None:
+        """Record a Discord message in the in-memory ambient channel window."""
+        limit = self._cfg.discord.global_context_message_limit
+        if limit <= 0:
+            return
+
+        content = self._format_message_content_for_context(message)
+        if not content:
+            return
+
+        channel_id = message.channel.id
+        if channel_id not in self._channel_context:
+            self._channel_context[channel_id] = deque(maxlen=limit)
+
+        self._channel_context[channel_id].append(ChannelContextMessage(
+            content=content,
+            username=getattr(message.author, "display_name", message.author.name),
+            timestamp=message.created_at,
+            from_bot=message.author.bot,
+            user_id=str(message.author.id),
+        ))
+
+    async def _get_reply_context(self, message: discord.Message) -> Optional[ChannelContextMessage]:
+        """Return the message being replied to, if Discord provided it."""
+        ref = message.reference
+        if ref is None:
+            return None
+
+        replied: Optional[discord.Message] = None
+        if isinstance(ref.resolved, discord.Message):
+            replied = ref.resolved
+        elif ref.message_id and hasattr(message.channel, "fetch_message"):
+            try:
+                replied = await message.channel.fetch_message(ref.message_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                return None
+
+        if replied is None:
+            return None
+
+        content = self._format_message_content_for_context(replied)
+        if not content:
+            return None
+
+        return ChannelContextMessage(
+            content=content,
+            username=getattr(replied.author, "display_name", replied.author.name),
+            timestamp=replied.created_at,
+            from_bot=replied.author.bot,
+            user_id=str(replied.author.id),
+        )
+
+    @staticmethod
+    def _format_message_content_for_context(message: discord.Message) -> str:
+        parts: list[str] = []
+        if message.content and message.content.strip():
+            parts.append(message.content.strip())
+        for attachment in message.attachments:
+            parts.append(f"[attachment: {attachment.filename}]")
+        return " ".join(parts).strip()
 
     # ------------------------------------------------------------------
     # Prefix commands
@@ -233,7 +307,8 @@ class GhostDiscordBot(commands.Bot):
 
         if cmd == "update_summary":
             success, msg = await self._state.update_summaries(platform_key)
-            await message.reply(msg)
+            sent_message = await message.reply(msg)
+            self._record_channel_message(sent_message)
 
     # ------------------------------------------------------------------
     # Slash commands

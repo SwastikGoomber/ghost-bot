@@ -18,6 +18,7 @@ from .exceptions import (
 from .models import (
     Platform,
     Message,
+    ChannelContextMessage,
     PlatformIdentity,
     UserSummaries,
     UserState,
@@ -46,6 +47,7 @@ __all__ = [
     # models
     "Platform",
     "Message",
+    "ChannelContextMessage",
     "PlatformIdentity",
     "UserSummaries",
     "UserState",

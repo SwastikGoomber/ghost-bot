@@ -96,14 +96,24 @@ class BotConfig:
 
 
 @dataclass
+class CustomEmoteConfig:
+    name: str
+    description: str
+    emote_visual: str = ""
+
+
+@dataclass
 class DiscordConfig:
     max_message_length: int = 2000
+    global_context_message_limit: int = 30
     authorized_slash_user_ids: list[int] = field(default_factory=list)
+    custom_emotes: list[CustomEmoteConfig] = field(default_factory=list)
 
 
 @dataclass
 class TwitchConfig:
     max_message_length: int = 500
+    custom_emotes: list[CustomEmoteConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -228,17 +238,34 @@ def _load_config() -> Config:
         nap_durations={int(k): int(v) for k, v in nap_raw.items()},
     )
 
+    def _custom_emotes(raw_items: list[dict]) -> list[CustomEmoteConfig]:
+        emotes: list[CustomEmoteConfig] = []
+        for item in raw_items:
+            name = str(item.get("name", "")).strip()
+            description = str(item.get("description", "")).strip()
+            if not name or not description:
+                continue
+            emotes.append(CustomEmoteConfig(
+                name=name,
+                description=description,
+                emote_visual=str(item.get("emote_visual", "")).strip(),
+            ))
+        return emotes
+
     # --- discord ---
     discord_raw = raw.get("discord", {})
     discord = DiscordConfig(
         max_message_length=discord_raw.get("max_message_length", 2000),
+        global_context_message_limit=int(discord_raw.get("global_context_message_limit", 30)),
         authorized_slash_user_ids=[int(i) for i in discord_raw.get("authorized_slash_user_ids", [])],
+        custom_emotes=_custom_emotes(discord_raw.get("custom_emotes", [])),
     )
 
     # --- twitch ---
     twitch_raw = raw.get("twitch", {})
     twitch = TwitchConfig(
         max_message_length=twitch_raw.get("max_message_length", 500),
+        custom_emotes=_custom_emotes(twitch_raw.get("custom_emotes", [])),
     )
 
     # --- rag ---

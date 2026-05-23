@@ -75,6 +75,23 @@ bot:
 
 discord:
   max_message_length: 2000
+  global_context_message_limit: 30
+  custom_emotes:
+    # use the full bot-renderable token: <:name:id> or <a:name:id>
+    - name: "<:POUT:1496184066062680217>"
+      description: "Pouting, sulking, or dramatically displeased reaction."
+      emote_visual: "A very expressive and dramatic pouty expression, turning head away from POV"
+    - name: "<:Angy:1279896002886766655>"
+      description: "Angry, frustrated, or annoyed reaction."
+      emote_visual: "Lilly's angry face, screaming with mouth open aggressively"
+    - name: "<:ANGRY:1496183689862975539>"
+      description: "An alternate version of the ANGY emote, with a more aggressive and angry expression."
+      emote_visual: "Lilly's angry face, screaming with mouth open aggressively, with red temple veins visible"
+    - name: "<:suckthis:1441557883065077930>"
+      description: "'Suck this' basically telling to suck it, kind of equivalent to saying 'fuck you'"
+      emote_visual: "Lilly holding a chicken in her hands, with the caption 'suck my cock' as a double meaning wordplay."
+
+
   authorized_slash_user_ids:
     - 584379536108552246
     - 209422949009195008
@@ -84,6 +101,10 @@ discord:
 
 twitch:
   max_message_length: 500
+  custom_emotes:
+    - name: "lilly3smh"
+      description: "Disappointed, unimpressed, or shaking-my-head reaction."
+      emote_visual: "A facepalm or shaking-my-head style emote."
 
 rag:
   enabled: true                # Set to true once Ollama + nomic-embed-text is running

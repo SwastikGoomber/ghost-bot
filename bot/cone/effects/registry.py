@@ -26,6 +26,7 @@ from .basic import (
     transform_drunk,
 )
 from .advanced import apply_advanced_effect, is_advanced_effect
+from .protection import apply_with_protected_spans
 
 
 # ---------------------------------------------------------------------------
@@ -97,4 +98,4 @@ def apply_effect(text: str, effect: str) -> str:
     Raises ConeEffectNotFoundError for unknown names.
     """
     canonical = resolve(effect)
-    return EFFECTS[canonical](text)
+    return apply_with_protected_spans(text, EFFECTS[canonical])
