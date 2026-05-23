@@ -170,18 +170,25 @@ async def process_message(
     # 3. Parallel: RAG retrieval (if needed)
     # ------------------------------------------------------------------
     rag_chunks: list[RetrievedChunk] = []
-    if flags.rag_required and cfg.rag.enabled:
+    rag_allowed_for_platform = (
+        platform == Platform.DISCORD
+        or (platform == Platform.TWITCH and cfg.rag.enable_twitch_retrieval)
+    )
+    if flags.rag_required and cfg.rag.enabled and rag_allowed_for_platform:
         try:
             taxonomy = await get_taxonomy()
             planner = RAGQueryPlanner(taxonomy)
             query = await planner.plan(message)
-            rag_chunks = await retrieve(query, taxonomy=taxonomy)
+            alias_map = state_manager.build_name_alias_map()
+            rag_chunks = await retrieve(query, taxonomy=taxonomy, alias_map=alias_map)
             # Filter out low-quality chunks (significance < 2 if all are low)
             if rag_chunks and all(c.significance < 2 for c in rag_chunks):
                 logger.debug("All RAG chunks have low significance — skipping injection.")
                 rag_chunks = []
         except Exception as exc:
             logger.warning("RAG retrieval failed (%s) — continuing without context.", exc)
+    elif flags.rag_required and cfg.rag.enabled:
+        logger.debug("RAG retrieval skipped for platform=%s by config.", platform.value)
 
     # ------------------------------------------------------------------
     # 4. Build system prompt

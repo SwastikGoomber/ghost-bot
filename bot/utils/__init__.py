@@ -21,10 +21,12 @@ from .models import (
     PlatformIdentity,
     UserSummaries,
     UserState,
+    NameAliasMap,
     ConeCondition,
     ConeData,
     ConeResult,
 )
+from .name_resolution import build_name_alias_map
 from .logging import setup_logging, get_logger
 from .llm import get_llm_client, LLMClient
 
@@ -47,9 +49,11 @@ __all__ = [
     "PlatformIdentity",
     "UserSummaries",
     "UserState",
+    "NameAliasMap",
     "ConeCondition",
     "ConeData",
     "ConeResult",
+    "build_name_alias_map",
     # logging
     "setup_logging",
     "get_logger",

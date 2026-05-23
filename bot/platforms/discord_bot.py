@@ -189,15 +189,16 @@ class GhostDiscordBot(commands.Bot):
         # ------------------------------------------------------------------
         # Get response from pipeline
         # ------------------------------------------------------------------
-        response = await process_message(
-            platform=Platform.DISCORD,
-            user_state=user_state,
-            message=message.content,
-            state_manager=self._state,
-            context_builder=self._ctx_builder,
-            cone_manager=self._cone,
-            image_urls=image_urls or None,
-        )
+        async with message.channel.typing():
+            response = await process_message(
+                platform=Platform.DISCORD,
+                user_state=user_state,
+                message=message.content,
+                state_manager=self._state,
+                context_builder=self._ctx_builder,
+                cone_manager=self._cone,
+                image_urls=image_urls or None,
+            )
 
         # ------------------------------------------------------------------
         # Persist conversation (only for genuine interactions)

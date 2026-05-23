@@ -217,6 +217,19 @@ class TaxonomySnapshot(BaseModel):
     known_topics: list[str] = Field(default_factory=list)
 
 
+class NameAliasMap(BaseModel):
+    """
+    Alias expansion boundary shared with RAG.
+
+    Keys are normalized names/aliases. Values are every known spelling for the
+    same user, preserving original casing where available.
+    """
+    aliases_by_name: dict[str, list[str]] = Field(default_factory=dict)
+
+    def expand(self, name: str) -> list[str]:
+        normalized = " ".join(name.lower().split())
+        return self.aliases_by_name.get(normalized, [])
+
 
 class RetrievedChunk(BaseModel):
     """

@@ -87,6 +87,7 @@ twitch:
 
 rag:
   enabled: true                # Set to true once Ollama + nomic-embed-text is running
+  enable_twitch_retrieval: false # Twitch chat usually moves too fast for lore retrieval
   enabled_channel_ids: []       # Add Discord channel IDs to ingest here
 
   # Ingestion schedule — daily at 6:00 AM IST (00:30 UTC)

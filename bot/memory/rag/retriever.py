@@ -22,7 +22,14 @@ import logging
 from typing import Optional
 
 from bot.utils.config import get_config
-from bot.utils.models import FilterClause, LogicGate, RetrievalQuery, RetrievedChunk, TaxonomySnapshot
+from bot.utils.models import (
+    FilterClause,
+    LogicGate,
+    NameAliasMap,
+    RetrievalQuery,
+    RetrievedChunk,
+    TaxonomySnapshot,
+)
 from bot.utils.exceptions import LLMError
 
 from .embedder import embed_text
@@ -32,7 +39,24 @@ from .store import vector_search, metadata_only_search
 logger = logging.getLogger(__name__)
 
 
-def _get_name_candidates(name: str, known_names: list[str], cutoff: float = 0.6) -> list[str]:
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
+
+
+def _get_name_candidates(
+    name: str,
+    known_names: list[str],
+    alias_map: Optional[NameAliasMap] = None,
+    cutoff: float = 0.6,
+) -> list[str]:
     """
     Return ALL canonical names from the taxonomy that fuzzy-match the given name.
 
@@ -44,23 +68,34 @@ def _get_name_candidates(name: str, known_names: list[str], cutoff: float = 0.6)
 
     Returns the original name (unchanged) as a fallback if no match is found.
     """
+    seed_names = [name]
+    if alias_map:
+        seed_names.extend(alias_map.expand(name))
+    seed_names = _dedupe_preserve_order(seed_names)
+
     if not known_names:
-        return [name]
-    name_lower = name.lower()
+        return seed_names
+
     known_lower = [n.lower() for n in known_names]
-    matches = difflib.get_close_matches(name_lower, known_lower, n=10, cutoff=cutoff)
-    if not matches:
+
+    fuzzy_candidates: list[str] = []
+    for seed in seed_names:
+        matches = difflib.get_close_matches(seed.lower(), known_lower, n=10, cutoff=cutoff)
+        fuzzy_candidates.extend(known_names[known_lower.index(m)] for m in matches)
+
+    candidates = _dedupe_preserve_order(seed_names + fuzzy_candidates)
+    if len(candidates) == len(seed_names):
         logger.debug("[candidates] '%s' — no fuzzy match found, using as-is", name)
-        return [name]
-    candidates = [known_names[known_lower.index(m)] for m in matches]
+        return candidates
     if len(candidates) > 1 or candidates[0] != name:
-        logger.debug("[candidates] '%s' → %s (fuzzy candidates)", name, candidates)
+        logger.debug("[candidates] '%s' → %s (alias/fuzzy candidates)", name, candidates)
     return candidates
 
 
 async def retrieve(
     query: RetrievalQuery,
     taxonomy: Optional[TaxonomySnapshot] = None,
+    alias_map: Optional[NameAliasMap] = None,
 ) -> list[RetrievedChunk]:
     """
     Execute a hybrid retrieval query and return ranked, formatted results.
@@ -70,6 +105,7 @@ async def retrieve(
         taxonomy: Optional taxonomy snapshot — used to expand individual names
                   to all fuzzy-matching canonical forms so 'Ghost' matches both
                   'Ghost' and 'GH0ST' stored in the DB.
+        alias_map: Optional user-profile alias map from the state boundary.
 
     Returns:
         Up to query.top_k RetrievedChunk objects, sorted by final score descending.
@@ -83,7 +119,7 @@ async def retrieve(
     # Build filters:
     #   atlas_filter  → passed to $vectorSearch.filter (only indexed fields, currently {})
     #   post_filter   → applied as $match after vector search
-    atlas_filter, post_filter = _build_mongo_filter(query, known_individuals)
+    atlas_filter, post_filter = _build_mongo_filter(query, known_individuals, alias_map)
 
     if cfg.rag.post_filter_disabled:
         logger.debug("[retrieve] post_filter_disabled=true — skipping $match post-filter")
@@ -175,6 +211,7 @@ async def retrieve(
 def _build_mongo_filter(
     query: RetrievalQuery,
     known_individuals: list[str],
+    alias_map: Optional[NameAliasMap] = None,
 ) -> tuple[dict, dict]:
     """
     Translate RetrievalQuery into (atlas_filter, post_filter).
@@ -204,23 +241,23 @@ def _build_mongo_filter(
             # Each required individual gets its own $in with all fuzzy-matched aliases.
             # This correctly handles 'Ghost' → ['Ghost', 'GH0ST'] both in the same doc.
             for name in clause.values:
-                candidates = _get_name_candidates(name, known_individuals)
+                candidates = _get_name_candidates(name, known_individuals, alias_map)
                 post_and.append({"individuals": {"$in": candidates}})
         elif clause.gate == LogicGate.NOT:
             all_candidates = []
             for name in clause.values:
-                all_candidates.extend(_get_name_candidates(name, known_individuals))
+                all_candidates.extend(_get_name_candidates(name, known_individuals, alias_map))
             post_and.append({"individuals": {"$nin": list(set(all_candidates))}})
         else:  # OR
             all_candidates = []
             for name in clause.values:
-                all_candidates.extend(_get_name_candidates(name, known_individuals))
+                all_candidates.extend(_get_name_candidates(name, known_individuals, alias_map))
             post_and.append({"individuals": {"$in": list(set(all_candidates))}})
 
     if query.exclude_individuals:
         all_excluded = []
         for name in query.exclude_individuals:
-            all_excluded.extend(_get_name_candidates(name, known_individuals))
+            all_excluded.extend(_get_name_candidates(name, known_individuals, alias_map))
         post_and.append({"individuals": {"$nin": list(set(all_excluded))}})
 
     # --- arc tags ---

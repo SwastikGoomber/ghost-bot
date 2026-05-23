@@ -37,11 +37,13 @@ from ..utils.exceptions import StateError, DatabaseError
 from ..utils.models import (
     ConeData,
     Message,
+    NameAliasMap,
     Platform,
     PlatformIdentity,
     UserState,
     UserSummaries,
 )
+from ..utils.name_resolution import build_name_alias_map
 from . import db as _db_module
 
 logger = logging.getLogger(__name__)
@@ -173,6 +175,21 @@ class StateManager:
     # ------------------------------------------------------------------
     # User state access
     # ------------------------------------------------------------------
+
+    def unique_user_states(self) -> list[UserState]:
+        """Return each loaded UserState object once, preserving shared-account links."""
+        unique: list[UserState] = []
+        seen_obj_ids: set[int] = set()
+        for state in self._users.values():
+            if id(state) in seen_obj_ids:
+                continue
+            seen_obj_ids.add(id(state))
+            unique.append(state)
+        return unique
+
+    def build_name_alias_map(self) -> NameAliasMap:
+        """Build a typed alias map for cross-domain name expansion."""
+        return build_name_alias_map(self.unique_user_states())
 
     async def get_user_state(
         self,

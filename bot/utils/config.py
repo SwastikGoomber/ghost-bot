@@ -109,6 +109,7 @@ class TwitchConfig:
 @dataclass
 class RagConfig:
     enabled: bool = False
+    enable_twitch_retrieval: bool = False
     enabled_channel_ids: list[int] = field(default_factory=list)
     extraction_cron: str = "0 30 0 * * *"
     extraction_lookback_hours: int = 24
@@ -244,6 +245,7 @@ def _load_config() -> Config:
     rag_raw = raw.get("rag", {})
     rag = RagConfig(
         enabled=rag_raw.get("enabled", False),
+        enable_twitch_retrieval=bool(rag_raw.get("enable_twitch_retrieval", False)),
         enabled_channel_ids=[int(i) for i in rag_raw.get("enabled_channel_ids", [])],
         extraction_cron=rag_raw.get("extraction_cron", "0 30 0 * * *"),
         extraction_lookback_hours=int(rag_raw.get("extraction_lookback_hours", 24)),
@@ -256,6 +258,7 @@ def _load_config() -> Config:
         significance_weight=float(rag_raw.get("significance_weight", 0.4)),
         min_significance_filter=int(rag_raw.get("min_significance_filter", 1)),
         suggested_tag_collection=str(rag_raw.get("suggested_tag_collection", "rag_suggested_tags")),
+        post_filter_disabled=bool(rag_raw.get("post_filter_disabled", False)),
     )
 
     return Config(

@@ -26,11 +26,12 @@ _anti_repetition_template_cache: Optional[str] = None
 _cone_hint_cache: Optional[str] = None
 _cone_hint_repetition_cache: Optional[str] = None
 _platform_twitch_cache: Optional[str] = None
+_pronouns_cache: Optional[str] = None
 
 
 def _load_prompt(filename: str, cache_attr: str) -> str:
     """Generic cached prompt loader from prompts/ directory."""
-    global _anti_repetition_template_cache, _cone_hint_cache, _cone_hint_repetition_cache, _platform_twitch_cache
+    global _anti_repetition_template_cache, _cone_hint_cache, _cone_hint_repetition_cache, _platform_twitch_cache, _pronouns_cache
     candidates = [
         Path(f"prompts/{filename}"),
         Path(__file__).resolve().parents[2] / "prompts" / filename,
@@ -76,6 +77,13 @@ def _load_platform_twitch() -> str:
     if _platform_twitch_cache is None:
         _platform_twitch_cache = _load_prompt("platform_twitch.md", "_platform_twitch_cache")
     return _platform_twitch_cache
+
+
+def _load_pronouns() -> str:
+    global _pronouns_cache
+    if _pronouns_cache is None:
+        _pronouns_cache = _load_prompt("pronouns.md", "_pronouns_cache")
+    return _pronouns_cache
 
 
 # ---------------------------------------------------------------------------
@@ -136,18 +144,21 @@ class ContextBuilder:
                 if block:
                     parts.append(block)
 
-        # 6. Recent conversation summary for the sender
+        # 6. Pronoun handling
+        parts.append(_load_pronouns())
+
+        # 7. Recent conversation summary for the sender
         if user_state.summaries.last_conversation and \
                 user_state.summaries.last_conversation != "No conversation summary yet":
             parts.append(
                 f"RECENT CONVERSATION CONTEXT: {user_state.summaries.last_conversation}"
             )
 
-        # 7. RAG retrieved memory (if available)
+        # 8. RAG retrieved memory (if available)
         if rag_context:
             parts.append(rag_context)
 
-        # 8. Global anti-repetition guard — fires on every turn when Ghost has
+        # 9. Global anti-repetition guard — fires on every turn when Ghost has
         #    said 2+ things recently. Prevents phrase loops even on plain chat.
         recent_bot = [
             msg.content for msg in user_state.recent_messages
@@ -158,7 +169,7 @@ class ContextBuilder:
             template = _load_anti_repetition_template()
             parts.append(template.replace("{recent_messages}", recent_lines))
 
-        # 9. Cone request hint + cone-response variety reminder
+        # 10. Cone request hint + cone-response variety reminder
         if cone_requested:
             parts.append(_load_cone_hint())
             if recent_bot:
