@@ -1,0 +1,59 @@
+models:
+  chat: "gemini-2.5-flash-lite"
+  vision: "gemini-2.0-flash"
+  summary: "gemini-2.5-flash-lite"
+  router: "gemma4:e4b"        # Phase 3 - Gemma 4 local router via Ollama
+  embedder: "nomic-embed-text" # Phase 4 - local embeddings via Ollama
+
+gemini:
+  chat:
+    temperature: 0.9
+    top_p: 0.7
+    max_output_tokens: 1000
+  vision:
+    temperature: 0.7
+    top_p: 0.8
+    max_output_tokens: 500
+  summary:
+    temperature: 0.3
+    top_p: 0.9
+    max_output_tokens: 500
+
+memory:
+  message_history_limit: 15
+  summary_trigger_count: 50
+  messages_kept_after_summary: 30
+
+cone:
+  default_duration_minutes: 30
+  max_duration_hours: 24
+  permissions:
+    - "lillyyen"
+    - "puckz"
+    - "river333"
+    - "dulcibel"
+    - "yostiiii"
+
+bot:
+  name: "Ghost"
+  name_triggers:
+    - "ghost"
+    - "ghosty"
+  daily_request_limit: 200
+  minute_request_limit: 20
+  nap_durations:
+    50: 5
+    100: 10
+    150: 15
+
+discord:
+  max_message_length: 2000
+  authorized_slash_user_ids:
+    - 584379536108552246
+    - 209422949009195008
+    - 939512133350211625
+    - 145297670242566144
+    - 1394673202265063484
+
+twitch:
+  max_message_length: 500
