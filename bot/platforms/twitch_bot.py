@@ -1,8 +1,8 @@
 """
-Twitch bot — thin platform adapter.
+Twitch bot — thin platform adapter (TwitchIO v3).
 
 Responsibilities:
-- Receive Twitch channel messages and commands.
+- Receive Twitch channel messages via EventSub WebSocket (channel.chat.message).
 - Call process_message() for LLM responses.
 - Handle !confirm_link and !ping commands.
 - Format and send responses within Twitch's 500-character limit.
@@ -10,22 +10,36 @@ Responsibilities:
 Explicitly NOT responsible for:
 - Any LLM logic, prompt building, or routing.
 - Cone state (Twitch users cannot be coned — cone system is Discord-only).
+
+Authentication notes (TwitchIO v3):
+- Bot requires a User Access Token with scopes: user:read:chat, user:write:chat, user:bot.
+- Broadcaster channel must have granted channel:bot scope (or bot is a mod).
+- On first run, visit http://localhost:4343/oauth?scopes=user:read:chat+user:write:chat+user:bot
+  in your browser and authorise. TwitchIO will save the token to .tio.tokens.json.
+- Required env vars:
+    TWITCH_CLIENT_ID       - App client ID from Twitch Dev Console
+    TWITCH_CLIENT_SECRET   - App client secret from Twitch Dev Console
+    TWITCH_BOT_ID          - Numeric User ID of the bot account (lillen_gh0st)
+    TWITCH_OWNER_ID        - Numeric User ID of the channel to join (LillyYenVT)
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import traceback
-from typing import Optional
+import typing
 
+import twitchio
+from twitchio import eventsub
 from twitchio.ext import commands
 
-from ..utils.config import get_config
-from ..utils.models import Platform
-from ..memory.state import StateManager
-from ..cone.manager import ConeManager
-from ..pipeline.context import ContextBuilder
-from ..pipeline.handler import process_message
+from bot.utils.config import get_config
+from bot.utils.models import Platform
+from bot.memory.state import StateManager
+from bot.cone.manager import ConeManager
+from bot.pipeline.context import ContextBuilder
+from bot.pipeline.handler import process_message
 
 logger = logging.getLogger(__name__)
 
@@ -51,43 +65,97 @@ class GhostTwitchBot(commands.Bot):
         cone_manager: ConeManager,
         context_builder: ContextBuilder,
     ) -> None:
-        import os
         cfg = get_config()
+
+        bot_id = os.environ.get("TWITCH_BOT_ID", "")
+        broadcaster_id = os.environ.get("TWITCH_OWNER_ID", "")
+        client_id = os.environ.get("TWITCH_CLIENT_ID", "")
+        client_secret = os.environ.get("TWITCH_CLIENT_SECRET", "")
+
         super().__init__(
-            token=os.environ["TWITCH_TOKEN"],
-            client_id=os.environ.get("TWITCH_CLIENT_ID", ""),
-            client_secret=os.environ.get("TWITCH_CLIENT_SECRET", ""),
-            bot_id=os.environ.get("TWITCH_CLIENT_ID", ""),
-            nick=os.environ.get("TWITCH_BOT_NAME", "ghost_bot"),
+            client_id=client_id,
+            client_secret=client_secret,
+            bot_id=bot_id,
+            # owner_id here means the bot-developer's personal account (optional).
+            # We intentionally leave it unset; the broadcaster channel is stored separately.
             prefix="!",
-            initial_channels=[os.environ.get("TWITCH_CHANNEL_NAME", "")],
         )
+
         self._cfg = cfg
         self._state = state_manager
         self._cone = cone_manager
         self._ctx_builder = context_builder
+        # The broadcaster's numeric ID (LillyYenVT) — channel the bot reads/writes in.
+        self._broadcaster_id: str = broadcaster_id
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def event_ready(self) -> None:
-        logger.info("Twitch bot ready: %s", self.nick)
+    async def setup_hook(self) -> None:
+        """Subscribe to EventSub chat messages after login."""
+        broadcaster_id = self._broadcaster_id
+        bot_id = self.bot_id  # reads from parent's _bot_id; will assert if not set
+
+        if not broadcaster_id or not bot_id:
+            logger.warning(
+                "TWITCH_OWNER_ID or TWITCH_BOT_ID not set — "
+                "Twitch bot will not subscribe to chat events."
+            )
+            return
+
+        payload = eventsub.ChatMessageSubscription(
+            broadcaster_user_id=broadcaster_id,
+            user_id=bot_id,
+        )
+
         try:
-            channel_name = self._cfg.bot.name_triggers[0] if self._cfg.bot.name_triggers else "ghost"
-            import os
-            channel = self.get_channel(os.environ.get("TWITCH_CHANNEL_NAME", ""))
-            if channel:
-                await channel.send("/me Make way lil humans, Gh0st is here!")
+            await self.subscribe_websocket(payload=payload)
+            logger.info("Subscribed to Twitch chat messages for channel %s.", broadcaster_id)
+        except twitchio.HTTPException as exc:
+            if exc.status == 403:
+                logger.warning(
+                    "Twitch bot failed to subscribe to chat (403 Forbidden). "
+                    "This usually means the bot needs a User Access Token.\n"
+                    "👉 Visit http://localhost:4343/oauth?scopes=user:read:chat+user:write:chat+user:bot "
+                    "in your browser, log in as %s, and authorize the app.",
+                    self.user.name if self.user else "your bot account"
+                )
+            else:
+                logger.error("Failed to subscribe to Twitch chat: %s", exc)
+
+    async def event_oauth_authorized(self, payload: typing.Any) -> None:
+        """Called automatically when the user completes the OAuth flow."""
+        # The parent class handles saving the token to .tio.tokens.json
+        await super().event_oauth_authorized(payload)
+        logger.info("OAuth authorization successful! Retrying chat subscription...")
+        
+        # Now that we have a user token, retry the subscription
+        sub_payload = eventsub.ChatMessageSubscription(
+            broadcaster_user_id=self._broadcaster_id,
+            user_id=self.bot_id,
+        )
+        try:
+            await self.subscribe_websocket(payload=sub_payload)
+            logger.info("Successfully subscribed to Twitch chat messages!")
         except Exception as exc:
-            logger.warning("Could not send startup message: %s", exc)
+            logger.error("Failed to subscribe to Twitch chat after OAuth: %s", exc)
+
+    async def event_ready(self) -> None:
+        logger.info("Twitch bot ready | user=%s | bot_id=%s | channel=%s",
+                    self.user, self.bot_id, self._broadcaster_id)
 
     # ------------------------------------------------------------------
     # Message handling
     # ------------------------------------------------------------------
 
-    async def event_message(self, message) -> None:
-        if message.echo:
+    async def event_message(self, message: twitchio.ChatMessage) -> None:
+        # Ignore messages sent by the bot itself
+        if message.chatter.id == self.bot_id:  # ignore own messages
+            return
+
+        # Ignore shared-chat re-broadcasts from other channels
+        if message.source_broadcaster is not None:
             return
 
         try:
@@ -95,24 +163,26 @@ class GhostTwitchBot(commands.Bot):
         except Exception:
             logger.error("Unhandled exception in event_message:\n%s", traceback.format_exc())
 
-    async def _handle_message(self, message) -> None:
+    async def _handle_message(self, message: twitchio.ChatMessage) -> None:
         cfg = self._cfg
+        text: str = message.text
+        chatter_name: str = message.chatter.name
+        chatter_id: str = message.chatter.id
 
         # ------------------------------------------------------------------
-        # Commands
+        # Commands — handle !prefix commands first
         # ------------------------------------------------------------------
-        if message.content.startswith(("!", "/")):
-            cmd = message.content[1:].strip().lower()
+        if text.startswith(("!", "/")):
+            cmd = text[1:].strip().lower()
             cmd = "".join(ch for ch in cmd if ch.isprintable())
-            if await self._handle_command(message, cmd):
+            if await self._handle_command(message, cmd, chatter_name, chatter_id):
                 return
 
         # ------------------------------------------------------------------
         # Determine if Ghost should respond
         # ------------------------------------------------------------------
-        message_lower = message.content.lower()
-        import os
-        bot_name = os.environ.get("TWITCH_BOT_NAME", "ghost").lower()
+        message_lower = text.lower()
+        bot_name = (self.user.name if self.user else "ghost").lower()
         should_respond = (
             any(trigger in message_lower for trigger in cfg.bot.name_triggers)
             or f"@{bot_name}" in message_lower
@@ -124,10 +194,10 @@ class GhostTwitchBot(commands.Bot):
         # ------------------------------------------------------------------
         # Get or create user state
         # ------------------------------------------------------------------
-        platform_key = f"twitch_{message.author.id}"
-        user_state, link_notification = await self._state.get_user_state(
-            user_id=str(message.author.id),
-            username=message.author.name,
+        platform_key = f"twitch_{chatter_id}"
+        user_state, _link_notification = await self._state.get_user_state(
+            user_id=chatter_id,
+            username=chatter_name,
             platform="twitch",
         )
 
@@ -137,7 +207,7 @@ class GhostTwitchBot(commands.Bot):
         response = await process_message(
             platform=Platform.TWITCH,
             user_state=user_state,
-            message=message.content,
+            message=text,
             state_manager=self._state,
             context_builder=self._ctx_builder,
         )
@@ -146,7 +216,7 @@ class GhostTwitchBot(commands.Bot):
         # Persist conversation
         # ------------------------------------------------------------------
         if response not in _NON_INTERACTION_RESPONSES:
-            await self._state.add_message(platform_key, message.content, False, message.author.name)
+            await self._state.add_message(platform_key, text, False, chatter_name)
             await self._state.add_message(platform_key, response, True, cfg.bot.name)
 
             if self._state.needs_summary_update(platform_key):
@@ -155,32 +225,54 @@ class GhostTwitchBot(commands.Bot):
                     logger.warning("Summary update failed for %s: %s", platform_key, msg)
 
         # ------------------------------------------------------------------
-        # Send response
+        # Send response — reply to the user via Helix API
         # ------------------------------------------------------------------
-        await message.channel.send(f"@{message.author.name} {response}")
+        reply = f"@{chatter_name} {response}"
+        # Twitch has a 500-char hard limit
+        if len(reply) > 500:
+            reply = reply[:497] + "..."
+
+        try:
+            # message.broadcaster is a PartialUser for the channel owner.
+            # send_message(sender=...) uses the Helix Chat API — no IRC needed.
+            await message.broadcaster.send_message(
+                sender=self.bot_id,
+                message=reply,
+            )
+        except Exception as exc:
+            logger.error("Failed to send Twitch message: %s", exc)
 
     # ------------------------------------------------------------------
     # Commands
     # ------------------------------------------------------------------
 
-    async def _handle_command(self, message, cmd: str) -> bool:
+    async def _handle_command(
+        self, message: twitchio.ChatMessage, cmd: str, chatter_name: str, chatter_id: str
+    ) -> bool:
         """Handle !commands. Returns True if the command was consumed."""
-        platform_key = f"twitch_{message.author.id}"
+        platform_key = f"twitch_{chatter_id}"
+
+        async def reply(text: str) -> None:
+            try:
+                await message.broadcaster.send_message(
+                    sender=self.bot_id,  # bot's numeric ID string
+                    message=f"@{chatter_name} {text}",
+                )
+            except Exception as exc:
+                logger.error("Failed to send command reply: %s", exc)
 
         if cmd == "ping":
-            await message.channel.send(f"@{message.author.name} pong!")
+            await reply("pong!")
             return True
 
         if cmd == "update_summary":
             success, msg = await self._state.update_summaries(platform_key)
-            await message.channel.send(f"@{message.author.name} {msg}")
+            await reply(msg)
             return True
 
         if cmd == "confirm_link":
-            success, msg = await self._state.confirm_link_request(
-                str(message.author.id), message.author.name
-            )
-            await message.channel.send(f"@{message.author.name} {msg}")
+            success, msg = await self._state.confirm_link_request(chatter_id, chatter_name)
+            await reply(msg)
             return True
 
         return False

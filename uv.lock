@@ -696,7 +696,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "spacy", specifier = ">=3.4.0,<4.0.0" },
     { name = "textblob", specifier = ">=0.17.0" },
-    { name = "twitchio", specifier = ">=2.6.0" },
+    { name = "twitchio", specifier = ">=3.0.0" },
 ]
 
 [[package]]

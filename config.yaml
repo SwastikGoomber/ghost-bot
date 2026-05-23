@@ -79,17 +79,156 @@ discord:
   custom_emotes:
     # use the full bot-renderable token: <:name:id> or <a:name:id>
     - name: "<:POUT:1496184066062680217>"
-      description: "Pouting, sulking, or dramatically displeased reaction."
-      emote_visual: "A very expressive and dramatic pouty expression, turning head away from POV"
+      description: "Pouting, sulking, acting dramatically displeased, or stubbornly ignoring someone."
+      emote_visual: "Lilly with puffed cheeks and closed eyes, turning her head away in a dramatic, stubborn pout."
+
     - name: "<:Angy:1279896002886766655>"
-      description: "Angry, frustrated, or annoyed reaction."
-      emote_visual: "Lilly's angry face, screaming with mouth open aggressively"
+      description: "Screaming, throwing a tantrum, or expressing loud, chaotic frustration."
+      emote_visual: "Close-up of Lilly screaming loudly with her mouth wide open in a chaotic, derpy expression."
+
     - name: "<:ANGRY:1496183689862975539>"
-      description: "An alternate version of the ANGY emote, with a more aggressive and angry expression."
-      emote_visual: "Lilly's angry face, screaming with mouth open aggressively, with red temple veins visible"
+      description: "Seething with intense rage, holding back frustration, or visibly about to snap."
+      emote_visual: "Lilly glaring straight ahead with deeply furrowed brows, gritted teeth, clenched fists, and a red anger vein symbol popping on her forehead."
+
     - name: "<:suckthis:1441557883065077930>"
-      description: "'Suck this' basically telling to suck it, kind of equivalent to saying 'fuck you'"
-      emote_visual: "Lilly holding a chicken in her hands, with the caption 'suck my cock' as a double meaning wordplay."
+      description: "A cheeky, dismissive reaction equivalent to telling someone to 'suck it' or 'fuck off'."
+      emote_visual: "Lilly looking slightly annoyed while holding up a large, fluffy grey and white chicken. In the server's context, this acts as a visual pun representing the phrase 'suck my cock' as a double meaning wordplay."
+
+    - name: "<:WHEEZE:1496184236334383114>"
+      description: "Laughing uncontrollably, wheezing, or reacting to something hilariously absurd."
+      emote_visual: "A highly distorted, comical drawing of Lilly with a massive open mouth and streaming tears, leaning back in a 'wheezing' laugh."
+
+    - name: "<:AYO:1496184162544123914>"
+      description: "Suspicious, smug, or reacting to something questionable with a 'pause' or 'hold up' vibe."
+      emote_visual: "A close-up of Lilly's face with a smug, slightly suspicious half-smile and squinting her heterochromic eyes."
+
+    - name: "<:praisethesunn:1227977469236351086>"
+      description: "Celebrating, praising, or expressing triumphant, exaggerated joy in a dramatic meme way."
+      emote_visual: "Lilly wearing Solaire's armor from Dark Souls, throwing her arms up in the iconic 'Praise the Sun' pose with a glowing yellow aura behind her."
+
+    - name: "<:Hug:1212737082192302101>"
+      description: "Lilly showing affection specifically to Ghost, offering comfort, feeling safe, or expressing closeness."
+      emote_visual: "Lilly lovingly hugging a small, cute, fluffy horned creature representing Ghost, pressing her cheek against it affectionately."
+
+    - name: "<:HEART:1496183884126228501>"
+      description: "Expressing love, care, or finding something deeply endearing and wholesome."
+      emote_visual: "Lilly smiling warmly with closed eyes and blushing cheeks, holding a large pink heart in her hands while slightly nipping at the heart."
+
+    - name: "<:bwa:1391030955388436570>"
+      description: "Feeling helpless, innocent, caught off guard, or playfully acting like a small child being carried."
+      emote_visual: "A pixel-art style Lilly being picked up under her arms by a pair of large hands, dangling helplessly with a blank, cute expression."
+
+    - name: "<:Uwu:1386136646797365370>"
+      description: "Acting shy, bashful, cute, or playfully seeking attention/forgiveness."
+      emote_visual: "Lilly blushing heavily, looking up with big eyes, and pressing her index fingers together in the classic shy 'uwu' gesture."
+
+    - name: "<:ChoccyMilk:1133155894956404827>"
+      description: "Choccy Milk, ghost's absolute favorite beverage and ultimate addiction."
+      emote_visual: "A cute, stylized carton of chocolate milk with the words 'CHOCCY MILK' written across the front in light blue lettering."
+
+    - name: "<:Cozy:1123564754850545684>"
+      description: "Feeling extremely snug, warm, and comfortable, or happily settling in for a good rest."
+      emote_visual: "Lilly smiling peacefully with her eyes closed, bundled up tightly in a soft purple hooded blanket."
+
+    - name: "<:Cozy~1:1211695347848581211>"
+      description: "Ghost feeling perfectly warm, sleepy, and safely bundled up."
+      emote_visual: "Ghost, looking incredibly sleepy and snug while wrapped tightly in a blue blanket with white stripes."
+
+    - name: "<:CuteFrog:1364356053881327738>"
+      description: "Expressing overwhelming adoration, cuteness overload, or looking at someone with big, pleading puppy-dog eyes."
+      emote_visual: "A little green frog with giant, sparkling black eyes and bright pink blushing cheeks, holding its hands up to its face in awe."
+
+    - name: "<:DioBanan:1102854780453388389>"
+      description: "A cursed, hilarious abomination drawn by Lilly. Used to convey a menacing, bizarre, or utterly unhinged vibe. 'You thought it was a snack, but it was me, Dio!'"
+      emote_visual: "A peeled yellow banana, but the exposed fruit features the highly detailed, smug, and menacing face of Dio Brando from JoJo's Bizarre Adventure."
+
+    - name: "<:Fire:1123338796763717753>"
+      description: "Lilly ready to start a riot, enthusiastically burn something down, or eagerly bringing chaotic heat to a situation."
+      emote_visual: "Lilly smiling with wide, slightly unhinged eyes while proudly holding up a blazing wooden torch."
+
+    - name: "<:KNIFE:1496183944536785017>"
+      description: "Lilly showing her dark, menacing, or 'yandere' side. Used when feeling playfully (or genuinely) threatening."
+      emote_visual: "Lilly holding a large, shiny kitchen knife close to her face, staring intensely with wide, unblinking eyes and a creepy, knowing smile."
+
+    - name: "<:LOOKUP:1496184003907162244>"
+      description: " Staring up in complete, derpy confusion, looking pathetic, or waiting for something with a totally empty head. Alternatively used as a 'wtf is going up there."
+      emote_visual: "Lilly's face heavily distorted to mimic the 'Peepo' frog meme, looking upwards with wide, bulging eyes and a thick, goofy mouth."
+
+    - name: "<:LillyIRL:1364354170814992435>"
+      description: "Choosing violence, waking up and choosing chaos, or being an absolute, unstoppable menace on purpose."
+      emote_visual: "The iconic white goose from Untitled Goose Game waddling forward aggressively with a butter knife clamped firmly in its beak."
+
+    - name: "<:NotLikeThis:1152228951893233694>"
+      description: "Holding your head in sheer disappointment, frustration, or disbelief at someone's or your own absolute foolishness or at the situation in general."
+      emote_visual: "A real-life man with his hands gripping his hair, looking down in complete exhaustion and disbelief."
+
+    - name: "<:OmegaLUL:1121728953619587154>"
+      description: "Laughing so hard it physically hurts. The ultimate, max-volume reaction to something hilariously stupid."
+      emote_visual: "Lilly with a comically massive, featureless pink mouth taking up nearly her entire face while laughing hysterically."
+
+    - name: "<:PADDY_OBSERVE:1326932764976611348>"
+      description: "The ultimate 'WTF did I just read' reaction. Used when you something utterly cursed in the chat and deeply regrets having eyes."
+      emote_visual: "Paddy holding a piece of paper close to his face, his eyes aggressively bloodshot and bulging out in horror."
+
+    - name: "<:PauseChamp:1364353204560724100>"
+      description: "Curious, holding your breath, or waiting for the punchline. A 'hold up, let him cook' or 'what is going on here' vibe."
+      emote_visual: "Pepe the Frog looking sideways with wide, attentive, and unblinking eyes."
+
+    - name: "<:SCREAMCAT:1364356243396755591>"
+      description: "Pure, unfiltered, chaotic rage. Losing your mind, screeching, or having an absolute meltdown over something minor."
+      emote_visual: "A low-quality, blurry image of a white cat screaming aggressively, emphasizing chaotic motion."
+
+    - name: "<:SadBunBun:1364356240200831006>"
+      description: "Acting pitiful, playing the victim, or crying in a heavily exaggerated, pathetic way to get sympathy."
+      emote_visual: "The Sanrio character My Melody, edited to have deeply sad eyes with heavy tears welling up."
+
+    - name: "<:SadCat:1364356092938682512>"
+      description: "Acting totally innocent after doing something mischievous, or using weaponized cuteness to avoid trouble. Or just being sad."
+      emote_visual: "A tiny, fluffy Scottish Fold kitten looking up with massive, adorable, and completely innocent dark eyes."
+
+    - name: "<:ThisIsFine:1386136630267740214>"
+      description: "The classic 'This is fine' meme energy. Watching everything burn down around you, instigating chaos, and asking 'what's the worst that could happen?'"
+      emote_visual: "Lilly sitting calmly with a slightly unhinged smile, holding a mug of coffee while a massive, roaring fire burns right behind her."
+
+    - name: "<:Tiredge:1386136639197151282>"
+      description: "Being entirely exhausted, cranky, heavily sleep-deprived, or just having zero patience left for anyone's nonsense."
+      emote_visual: "Lilly heavily bundled up in a white blanket, looking miserable and exhausted with jagged red 'Zzz' sleep symbols floating around her."
+
+    - name: "<:smileee:1364351145094680606>"
+      description: "Expressing genuine, pure happiness, sheer joy, or a deeply wholesome and excited reaction."
+      emote_visual: "A photograph of a little girl in a pink shirt looking directly at the camera with a massive, bright, and genuinely happy smile."
+
+    - name: "<:try_it:1365847402401103942>"
+      description: "A smug and dangerous dare, challenging someone to act. The ultimate 'go ahead, make my day' visual, implying immediate and dramatic consequences."
+      emote_visual: "Close-up of Lilly holding up a sleek black handgun, looking slightly away with an incredibly smug, confident, and challenging expression."
+
+    - name: "<:akanbe:1279896149121044611>"
+      description: "A childish, taunting reaction. Mocking someone, saying 'bleh!', or being a playful brat."
+      emote_visual: "Lilly pulling down her lower eyelid with one finger and sticking her tongue out in the classic Japanese 'akanbe' taunting gesture."
+
+    - name: "<:lillycry:1014564152381026334>"
+      description: "Being utterly defeated, completely miserable, and asking 'WTF seriously?'."
+      emote_visual: "Lilly looking completely devastated, with a squiggly frown and literal waterfalls of thick blue tears pouring down their face."
+
+    - name: "<:Smile:1118276348314661004>"
+      description: "Staring directly into someone's soul. Used ironically when someone says something stupid and you are just silently judging them with a ironic smile, or when gaslighting someone."
+      emote_visual: "Lilly staring dead ahead with an unblinking, totally blank, and mildly unsettling smile."
+
+    - name: "<:UNHINGED:1119617519578255372>"
+      description: "Pure, silent, unhinged fury. When the fake smile drops and you are just genuinely angry and about to snap."
+      emote_visual: "Lilly zoomed in, staring intensely forward with deeply furrowed, angry eyebrows and a deadly serious expression."
+
+    - name: "<:excited:ID_HERE>"
+      description: "Bursting with joy, sheer anticipation, or seeing something absolutely amazing. Used when feeling extremely hyped or happy."
+      emote_visual: "Lilly's older, white-haired model looking forward with a massive, happy open mouth and glowing yellow star shapes sparkling in her eyes."
+
+    - name: "<:Tea_Pucka:1374104249935593655>"
+      description: "Pucka being incredibly small, cozy, and adorable. A wholesome, passive reaction of just hanging out."
+      emote_visual: "A tiny chibi version of Pucka sitting comfortably inside an elegant black-and-white teacup."
+
+    - name: "<:Tea_Served:1373203703154348114>"
+      description: "Lilly being incredibly small, cute, and cozy. A wholesome, passive reaction matching Pucka's teacup."
+      emote_visual: "A tiny chibi version of Lilly sitting comfortably inside an elegant red-and-white teacup, peeking over the rim with her eyes."
 
 
   authorized_slash_user_ids:

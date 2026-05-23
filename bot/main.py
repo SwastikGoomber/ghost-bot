@@ -169,15 +169,19 @@ async def main() -> None:
         discord_bot, twitch_bot, rag_scheduler = await _initialise()
 
         discord_token = os.environ["DISCORD_TOKEN"]
-        twitch_token = os.environ.get("TWITCH_TOKEN")
+        twitch_bot_id = os.environ.get("TWITCH_BOT_ID")
+        twitch_owner_id = os.environ.get("TWITCH_OWNER_ID")
 
         logger.info("Starting bots...")
         active_tasks = [asyncio.create_task(discord_bot.start(discord_token))]
 
-        if twitch_token:
+        if twitch_bot_id and twitch_owner_id:
+            # TwitchIO v3 uses managed tokens via .tio.tokens.json / OAuth adapter.
+            # On first run, visit http://localhost:4343/oauth?scopes=user:read:chat+user:write:chat+user:bot
+            # to authorise the bot account. The token is then saved automatically.
             active_tasks.append(asyncio.create_task(twitch_bot.start()))
         else:
-            logger.warning("TWITCH_TOKEN not set — Twitch bot will not start.")
+            logger.warning("TWITCH_BOT_ID or TWITCH_OWNER_ID not set — Twitch bot will not start.")
 
         shutdown_task = asyncio.create_task(_shutdown_event.wait())
 
