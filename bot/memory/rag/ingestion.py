@@ -481,6 +481,7 @@ async def _check_arc_summary_triggers(arc_stats) -> list[str]:
         closure_trigger = (
             stats.days_since_last_ingestion is not None
             and stats.days_since_last_ingestion >= cfg.arc_closure_gap_days
+            and stats.estimated_total_tokens >= cfg.arc_summary_min_token_threshold
         )
 
         if not (size_trigger or closure_trigger):

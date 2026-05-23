@@ -126,6 +126,7 @@ class RagConfig:
     min_message_length_words: int = 5
     conversation_gap_minutes: int = 10
     arc_summary_token_threshold: int = 4000
+    arc_summary_min_token_threshold: int = 1500
     arc_closure_gap_days: int = 5
     retrieval_top_k: int = 5
     vector_weight: float = 0.6
@@ -279,6 +280,7 @@ def _load_config() -> Config:
         min_message_length_words=int(rag_raw.get("min_message_length_words", 5)),
         conversation_gap_minutes=int(rag_raw.get("conversation_gap_minutes", 10)),
         arc_summary_token_threshold=int(rag_raw.get("arc_summary_token_threshold", 4000)),
+        arc_summary_min_token_threshold=int(rag_raw.get("arc_summary_min_token_threshold", 1500)),
         arc_closure_gap_days=int(rag_raw.get("arc_closure_gap_days", 5)),
         retrieval_top_k=int(rag_raw.get("retrieval_top_k", 5)),
         vector_weight=float(rag_raw.get("vector_weight", 0.6)),

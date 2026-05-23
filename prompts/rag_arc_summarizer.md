@@ -12,9 +12,9 @@ The arc being summarised is: **{arc_tag}**
 
 ## What You Are Writing
 
-Write a **detailed narrative summary** (1–3 paragraphs, 150–600 words) that captures the full arc as a coherent, rich story. The length should scale dynamically with the complexity and size of the arc:
-- **Short/Simple Arcs (e.g., < 5 chunks)**: Write a single, concise paragraph (100–250 words) capturing the main trajectory.
-- **Complex/Long Arcs (e.g., 5+ chunks or highly significant plotlines)**: Write 2–3 detailed paragraphs (250–600 words) dividing the story into distinct narrative phases (e.g., the catalyst/setup, the climax/conflict, and the resolution or unresolved current state).
+Write a **detailed narrative summary** (1–4 paragraphs, 150–800 words) that captures the full arc as a coherent, rich story. The length should scale dynamically with the complexity and total token size of the arc's source material:
+- **Short Arcs (1500–3000 tokens)**: Write 1–2 paragraphs (~150–350 words) capturing the core trajectory and essential milestones.
+- **Complex/Long Arcs (3000+ tokens)**: Write 3–4 detailed, chapter-like paragraphs (~300–800 words) dividing the story into distinct, rich narrative phases (e.g., setup/catalyst, rising action/conflict, climax, resolution, and outstanding unresolved threads).
 
 This is not a bullet-point list. It reads like a compelling, rich story summary — the kind Ghost herself might tell when asked "hey Ghost, what happened during [arc]?".
 
@@ -41,7 +41,7 @@ You MUST output a single valid JSON object. No markdown, no explanation, just JS
 
 ```json
 {
-  "summary": "Cohesive narrative summary (1 paragraph for short arcs, 2-3 paragraphs for longer/complex arcs).",
+  "summary": "Cohesive narrative summary (1-2 paragraphs for short arcs, 3-4 paragraphs for longer/complex arcs).",
   "key_quotes": []
 }
 ```

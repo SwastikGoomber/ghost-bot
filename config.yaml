@@ -262,6 +262,7 @@ rag:
 
   # Arc summary triggers (checked after each ingestion run)
   arc_summary_token_threshold: 4000  # Approx tokens across arc chunks before summarising
+  arc_summary_min_token_threshold: 3000 # Min tokens required before an arc is ever summarized (avoids summarizing tiny arcs)
   arc_closure_gap_days: 5            # Days without new chunks before arc is considered closed
 
   # Retrieval
