@@ -1,16 +1,20 @@
 """
-RAG extractor — calls Gemini to extract structured memory chunks from message segments.
+RAG extractor — calls Gemini to extract structured memory chunks from ALL segments in one call.
 
-The extractor is the cognitive core of the ingestion pipeline. It takes a raw
-conversation segment and produces a fully structured ExtractionResult (or indicates
-the segment isn't worth storing).
+The extractor is the cognitive core of the ingestion pipeline. Instead of making one LLM
+call per conversation segment, it batches the entire ingestion run into a single call:
+
+    segments (N) → one prompt → one generate_json() call → N ExtractionResults
+
+This eliminates the per-segment API call overhead, respects rate limits, and lets the
+model reason across the full temporal window for better arc tag consistency.
+
+Model: gemini-2.5-pro (configured via config.yaml extractor role) — needed for the long
+output window (up to 65K tokens) that a batch of dozens of segments requires.
 
 Every LLM call uses JSON mode (generate_json) so the output is always parseable.
-If parsing fails, the segment is skipped and the failure is logged — never crashes
-the ingestion run.
-
-The extractor also builds the taxonomy context string that is injected into the
-prompt so the LLM only proposes tags that fit existing namespaces.
+If parsing fails for individual entries, those segments are skipped and logged —
+the run never crashes on a single bad segment.
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ from bot.utils.llm.registry import get_llm_client
 from bot.utils.llm.gemini import GeminiClient
 from bot.utils.exceptions import LLMError
 
-from .models import ExtractionResult, MessageSegment
+from .models import BatchExtractionResult, ExtractionResult, MessageSegment
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +38,7 @@ _PROMPT_PATH = Path("prompts/rag_extractor.md")
 
 
 def _load_prompt() -> str:
-    """Load the extractor prompt template. Cached implicitly since it's called per-run."""
+    """Load the extractor prompt template."""
     return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
@@ -70,42 +74,70 @@ def _build_taxonomy_context(existing_arc_tags: list[str]) -> str:
 {arc_tag_list}"""
 
 
-async def extract_segment(
-    segment: MessageSegment,
-    existing_arc_tags: list[str],
-    recent_chunk_ids: Optional[list[str]] = None,
-) -> Optional[ExtractionResult]:
+def _build_segments_block(segments: list[MessageSegment]) -> str:
     """
-    Run the extractor LLM on a single MessageSegment.
+    Render all segments as a single numbered block for the batch prompt.
+
+    Format:
+        [SEGMENT 0] 2025-10-13 10:00 → 2025-10-13 10:45
+        [2025-10-13 10:00] UserA: message
+        [2025-10-13 10:02] Ghost: reply
+        ...
+
+        [SEGMENT 1] ...
+    """
+    blocks: list[str] = []
+    for i, seg in enumerate(segments):
+        start = seg.start_time.strftime("%Y-%m-%d %H:%M")
+        end = seg.end_time.strftime("%Y-%m-%d %H:%M")
+        header = f"[SEGMENT {i}] {start} → {end}"
+        body = seg.format_for_prompt()
+        blocks.append(f"{header}\n{body}")
+    return "\n\n".join(blocks)
+
+
+async def extract_segments_batch(
+    segments: list[MessageSegment],
+    existing_arc_tags: list[str],
+) -> list[Optional[ExtractionResult]]:
+    """
+    Run the extractor LLM on ALL segments in a single API call.
 
     Args:
-        segment:           The conversation segment to extract.
+        segments:          All conversation segments to process for this ingestion run.
         existing_arc_tags: All arc: tags currently in the taxonomy (for prompt context).
-        recent_chunk_ids:  IDs of the most recently stored chunks (passed as [RELATED_CHUNKS]
-                           context so the LLM can identify continuations).
 
     Returns:
-        ExtractionResult if the LLM produced valid output.
-        None if the segment is not worth storing OR if extraction failed (both are logged).
+        A list of the same length as `segments`.
+        Each element is either an ExtractionResult (worth storing) or None (not worth
+        storing, or extraction failed for that segment).
 
     Raises:
-        LLMError: Only on severe, unexpected LLM failures — normal extraction errors
-                  return None rather than raising.
+        LLMError: If the LLM call itself fails entirely (network, auth, quota exhausted
+                  with no fallback). Per-segment parse failures do NOT raise — they return None.
     """
+    if not segments:
+        return []
+
     client = get_llm_client("extractor")
     if not isinstance(client, GeminiClient):
         raise LLMError("The 'extractor' role must map to a GeminiClient.")
 
     prompt_template = _load_prompt()
     taxonomy_str = _build_taxonomy_context(existing_arc_tags)
-    segment_str = segment.format_for_prompt()
-    related_str = "\n".join(recent_chunk_ids or []) or "(none)"
+    segments_str = _build_segments_block(segments)
 
     filled_prompt = (
         prompt_template
         .replace("{taxonomy}", taxonomy_str)
-        .replace("{segment}", segment_str)
-        .replace("{related_chunks}", related_str)
+        .replace("{segments}", segments_str)
+    )
+
+    logger.info(
+        "Extractor: sending batch of %d segments (%d total messages) to %s",
+        len(segments),
+        sum(len(s.messages) for s in segments),
+        client.model,
     )
 
     messages = [{"role": "user", "content": filled_prompt}]
@@ -113,42 +145,83 @@ async def extract_segment(
     try:
         raw_json = await client.generate_json(messages)
     except LLMError as exc:
-        logger.error(
-            "Extractor LLM call failed for segment starting %s: %s",
-            segment.start_time.isoformat(),
-            exc,
-        )
-        return None
+        # Entire batch failed — raise so the caller can log and abort
+        raise LLMError(f"Batch extractor LLM call failed: {exc}") from exc
 
+    # ---------------------------------------------------------------------------
+    # Parse the batch response
+    # ---------------------------------------------------------------------------
     try:
         data = json.loads(raw_json)
     except json.JSONDecodeError as exc:
         logger.error(
-            "Extractor returned non-JSON for segment starting %s: %s\nRaw: %.200s",
-            segment.start_time.isoformat(),
+            "Batch extractor returned non-JSON. Skipping all %d segments. Error: %s\nRaw (first 500 chars): %.500s",
+            len(segments),
             exc,
             raw_json,
         )
-        return None
+        return [None] * len(segments)
 
     try:
-        result = ExtractionResult.model_validate(data)
+        batch = BatchExtractionResult.model_validate(data)
     except ValidationError as exc:
         logger.error(
-            "Extractor JSON failed Pydantic validation for segment starting %s: %s",
-            segment.start_time.isoformat(),
+            "Batch extractor JSON failed top-level Pydantic validation. "
+            "Skipping all %d segments. Error: %s",
+            len(segments),
             exc,
         )
-        return None
+        return [None] * len(segments)
 
-    if not result.worth_storing:
-        logger.debug(
-            "Extractor marked segment starting %s as not worth storing.",
-            segment.start_time.isoformat(),
-        )
-        return None
+    # Build a lookup dict: segment_index → SegmentExtractionResult
+    index_to_result = {entry.segment_index: entry for entry in batch.extractions}
 
-    return result
+    results: list[Optional[ExtractionResult]] = []
+    stored_count = 0
+    skipped_count = 0
+
+    for i, segment in enumerate(segments):
+        entry = index_to_result.get(i)
+
+        if entry is None:
+            # LLM omitted this index entirely — treat as not worth storing
+            logger.debug(
+                "Segment %d (starting %s) was omitted from batch response — treating as not worth storing.",
+                i, segment.start_time.isoformat(),
+            )
+            results.append(None)
+            skipped_count += 1
+            continue
+
+        if not entry.worth_storing:
+            logger.debug(
+                "Segment %d (starting %s) marked not worth storing.",
+                i, segment.start_time.isoformat(),
+            )
+            results.append(None)
+            skipped_count += 1
+            continue
+
+        # Cast SegmentExtractionResult → ExtractionResult (drop segment_index)
+        try:
+            result = ExtractionResult.model_validate(entry.model_dump(exclude={"segment_index"}))
+        except ValidationError as exc:
+            logger.error(
+                "Segment %d (starting %s) failed per-entry validation — skipping. Error: %s",
+                i, segment.start_time.isoformat(), exc,
+            )
+            results.append(None)
+            skipped_count += 1
+            continue
+
+        results.append(result)
+        stored_count += 1
+
+    logger.info(
+        "Extractor batch complete: %d segments → %d to store, %d skipped.",
+        len(segments), stored_count, skipped_count,
+    )
+    return results
 
 
 async def check_contradiction(

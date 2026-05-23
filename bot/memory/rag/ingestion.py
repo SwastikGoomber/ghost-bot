@@ -6,10 +6,9 @@ Ingestion flow (per the architecture plan):
     2. Filter out bots and very short messages
     3. Group messages into conversation segments (gap > conversation_gap_minutes = new segment)
     4. Deduplicate: skip segments whose message IDs were already ingested
-    5. For each segment: extract → embed → store
-       - Fact chunks: run contradiction check
-       - All chunks: queue suggested tags for review
-    6. Post-ingestion: check arc tags for summary triggers
+    5. Batch extract ALL remaining segments in ONE LLM call (extract_segments_batch)
+    6. For each result: embed → (fact: contradiction check) → store → queue suggested tags
+    7. Post-ingestion: check arc tags for summary triggers
 
 The Discord client reference is passed in from the job runner (via GhostDiscordBot).
 This module never imports from bot.platforms — the platform layer passes itself down.
@@ -28,9 +27,10 @@ from bot.utils.config import get_config
 from bot.utils.exceptions import LLMError
 
 from .embedder import embed_text
-from .extractor import extract_segment, check_contradiction
+from .extractor import extract_segments_batch, check_contradiction
 from .models import (
     DocType,
+    ExtractionResult,
     IngestionReport,
     MessageSegment,
     RAGDocument,
@@ -139,7 +139,7 @@ async def _process_channel(
     report: IngestionReport,
 ) -> list[str]:
     """
-    Fetch, segment, and ingest messages from a single channel.
+    Fetch, segment, dedup, batch-extract, and store from a single channel.
 
     Returns the list of arc tags used in chunks stored from this channel
     (for post-ingestion arc summary trigger checking).
@@ -155,17 +155,21 @@ async def _process_channel(
     report.segments_found += len(segments)
     logger.debug("Channel %d: %d messages → %d segments", channel.id, len(raw_messages), len(segments))
 
-    arc_tags_used: list[str] = []
+    # Dedup all segments upfront — filter before hitting the LLM
+    pending_segments = await _filter_duplicates(segments, report)
+    if not pending_segments:
+        return []
 
-    for segment in segments:
-        used_tags = await _process_segment(
-            segment=segment,
-            existing_arc_tags=existing_arc_tags,
-            report=report,
-        )
-        arc_tags_used.extend(used_tags)
+    # ONE batch LLM call for all pending segments
+    try:
+        extractions = await extract_segments_batch(pending_segments, existing_arc_tags)
+    except LLMError as exc:
+        logger.error("Batch extraction failed for channel %d: %s", channel.id, exc)
+        report.segments_extraction_failed += len(pending_segments)
+        return []
 
-    return arc_tags_used
+    # Embed + store each extracted chunk
+    return await _store_batch_results(pending_segments, extractions, report)
 
 
 # ---------------------------------------------------------------------------
@@ -206,24 +210,161 @@ async def ingest_channel_range(
 
     segments = _segment_messages(raw_messages, cfg.conversation_gap_minutes, str(channel.id))
     report.segments_found += len(segments)
+    logger.info(
+        "Range ingestion: %d messages → %d segments for channel %s (%s → %s)",
+        len(raw_messages), len(segments), channel.id,
+        after.strftime("%Y-%m-%d"), before.strftime("%Y-%m-%d"),
+    )
 
-    arc_tags_used: list[str] = []
-    for segment in segments:
-        used_tags = await _process_segment(
-            segment=segment,
-            existing_arc_tags=existing_arc_tags,
-            report=report,
-        )
-        arc_tags_used.extend(used_tags)
-        # Refresh arc tags after each store so subsequent segments see new tags
-        if used_tags:
-            existing_arc_tags = await get_distinct_arc_tags()
+    # Dedup upfront
+    pending_segments = await _filter_duplicates(segments, report)
+    if not pending_segments:
+        logger.info("All segments already ingested — nothing new to process.")
+        return []
+
+    logger.info(
+        "%d/%d segments are new (not yet ingested). Sending to batch extractor...",
+        len(pending_segments), len(segments),
+    )
+
+    # ONE batch LLM call for the entire date range
+    try:
+        extractions = await extract_segments_batch(pending_segments, existing_arc_tags)
+    except LLMError as exc:
+        logger.error("Batch extraction failed: %s", exc)
+        report.segments_extraction_failed += len(pending_segments)
+        raise
+
+    arc_tags_used = await _store_batch_results(pending_segments, extractions, report)
 
     if not skip_arc_summary_triggers and arc_tags_used:
         arc_stats = await get_arc_tag_stats(list(set(arc_tags_used)))
         await _check_arc_summary_triggers(arc_stats)
 
     return arc_tags_used
+
+
+# ---------------------------------------------------------------------------
+# Deduplication helper
+# ---------------------------------------------------------------------------
+
+async def _filter_duplicates(
+    segments: list[MessageSegment],
+    report: IngestionReport,
+) -> list[MessageSegment]:
+    """
+    Check all segments against the DB and return only those not yet ingested.
+    Updates report.segments_skipped_duplicate in place.
+    """
+    pending: list[MessageSegment] = []
+    for segment in segments:
+        if await find_existing_by_message_ids(segment.message_ids):
+            report.segments_skipped_duplicate += 1
+            logger.debug(
+                "Segment starting %s already ingested. Skipping.",
+                segment.start_time.isoformat(),
+            )
+        else:
+            pending.append(segment)
+    return pending
+
+
+# ---------------------------------------------------------------------------
+# Post-extraction: embed + store loop
+# ---------------------------------------------------------------------------
+
+async def _store_batch_results(
+    segments: list[MessageSegment],
+    extractions: list[Optional[ExtractionResult]],
+    report: IngestionReport,
+) -> list[str]:
+    """
+    Take the batch extraction results and, for each non-None result,
+    embed → contradiction check → store → queue suggested tags.
+
+    Returns the arc: tags used across all stored chunks (for arc trigger checking).
+    """
+    arc_tags_used: list[str] = []
+
+    for segment, extraction in zip(segments, extractions):
+        if extraction is None:
+            report.segments_skipped_not_worth_storing += 1
+            continue
+
+        arc_tags = await _embed_and_store(segment, extraction, report)
+        arc_tags_used.extend(arc_tags)
+
+    return arc_tags_used
+
+
+async def _embed_and_store(
+    segment: MessageSegment,
+    extraction: ExtractionResult,
+    report: IngestionReport,
+) -> list[str]:
+    """
+    Embed a single extraction result and store it. Handles contradiction check.
+
+    Returns the arc: tags found in this chunk (empty list if store fails).
+    """
+    chunk_id = str(uuid.uuid4())
+    doc = RAGDocument(
+        id=chunk_id,
+        doc_type=extraction.doc_type,
+        suggested_doc_type=extraction.suggested_doc_type,
+        summary=extraction.summary,
+        key_quotes=extraction.key_quotes,
+        tags=extraction.tags,
+        suggested_tags=extraction.suggested_tags,
+        suggestion_justifications=extraction.suggestion_justifications,
+        free_labels=extraction.free_labels,
+        individuals=extraction.individuals,
+        significance=extraction.significance,
+        sentiment=extraction.sentiment,
+        event_date=extraction.event_date,
+        related_chunk_ids=extraction.related_chunk_ids,
+        source_channel_id=segment.channel_id,
+        source_message_ids=segment.message_ids,
+    )
+
+    # Embed — fail hard if Ollama is unavailable (user's explicit choice)
+    try:
+        doc.embedding = await embed_text(doc.embedding_text())
+    except LLMError as exc:
+        raise LLMError(
+            f"Embedding failed for chunk from segment starting {segment.start_time.isoformat()}. "
+            f"Ollama must be running with nomic-embed-text. Error: {exc}"
+        ) from exc
+
+    # Contradiction check (only for fact chunks)
+    if extraction.doc_type == DocType.FACT and extraction.individuals:
+        existing_facts = await find_active_facts_for_individuals(extraction.individuals)
+        if existing_facts:
+            contradiction_detected, contradicted_id = await check_contradiction(
+                new_fact_summary=extraction.summary,
+                new_fact_id=chunk_id,
+                existing_facts=existing_facts,
+            )
+            if contradiction_detected and contradicted_id:
+                doc.potential_contradiction = True
+                report.contradictions_flagged += 1
+                logger.info(
+                    "Contradiction flagged: new chunk %s may conflict with existing chunk %s",
+                    chunk_id,
+                    contradicted_id,
+                )
+
+    # Store
+    await insert_document(doc)
+    report.chunks_stored += 1
+
+    # Queue suggested tags for human review
+    if extraction.suggested_tags:
+        await store_suggested_tags(
+            chunk_id, extraction.suggested_tags, extraction.suggestion_justifications
+        )
+
+    return [t for t in doc.tags if t.startswith("arc:")]
 
 
 # ---------------------------------------------------------------------------
@@ -314,94 +455,6 @@ def _segment_messages(
         segments.append(MessageSegment(messages=current_batch, channel_id=channel_id))
 
     return segments
-
-
-# ---------------------------------------------------------------------------
-# Per-segment pipeline
-# ---------------------------------------------------------------------------
-
-async def _process_segment(
-    segment: MessageSegment,
-    existing_arc_tags: list[str],
-    report: IngestionReport,
-) -> list[str]:
-    """
-    Run the full pipeline for a single segment: deduplicate → extract → embed → store.
-
-    Returns the arc: tags found in the chunk (for arc summary trigger checking).
-    """
-    # Step 1: Deduplication
-    if await find_existing_by_message_ids(segment.message_ids):
-        report.segments_skipped_duplicate += 1
-        logger.debug("Segment starting %s already ingested. Skipping.", segment.start_time.isoformat())
-        return []
-
-    # Step 2: Extract
-    extraction = await extract_segment(segment, existing_arc_tags)
-    if extraction is None:
-        report.segments_skipped_not_worth_storing += 1
-        return []
-
-    # Step 3: Assemble the RAGDocument (without embedding yet)
-    chunk_id = str(uuid.uuid4())
-    doc = RAGDocument(
-        id=chunk_id,
-        doc_type=extraction.doc_type,
-        suggested_doc_type=extraction.suggested_doc_type,
-        summary=extraction.summary,
-        key_quotes=extraction.key_quotes,
-        tags=extraction.tags,
-        suggested_tags=extraction.suggested_tags,
-        suggestion_justifications=extraction.suggestion_justifications,
-        free_labels=extraction.free_labels,
-        individuals=extraction.individuals,
-        significance=extraction.significance,
-        sentiment=extraction.sentiment,
-        event_date=extraction.event_date,
-        related_chunk_ids=extraction.related_chunk_ids,
-        source_channel_id=segment.channel_id,
-        source_message_ids=segment.message_ids,
-    )
-
-    # Step 4: Embed — fail hard if Ollama is unavailable (user's explicit choice)
-    try:
-        doc.embedding = await embed_text(doc.embedding_text())
-    except LLMError as exc:
-        # Re-raise with context — this aborts the ingestion run
-        raise LLMError(
-            f"Embedding failed for chunk from segment starting {segment.start_time.isoformat()}. "
-            f"Ollama must be running with nomic-embed-text. Error: {exc}"
-        ) from exc
-
-    # Step 5: Contradiction check (only for fact chunks)
-    contradiction_detected = False
-    if extraction.doc_type == DocType.FACT and extraction.individuals:
-        existing_facts = await find_active_facts_for_individuals(extraction.individuals)
-        if existing_facts:
-            contradiction_detected, contradicted_id = await check_contradiction(
-                new_fact_summary=extraction.summary,
-                new_fact_id=chunk_id,
-                existing_facts=existing_facts,
-            )
-            if contradiction_detected and contradicted_id:
-                doc.potential_contradiction = True
-                report.contradictions_flagged += 1
-                logger.info(
-                    "Contradiction flagged: new chunk %s may conflict with existing chunk %s",
-                    chunk_id,
-                    contradicted_id,
-                )
-
-    # Step 6: Store
-    await insert_document(doc)
-    report.chunks_stored += 1
-
-    # Step 7: Queue suggested tags for human review
-    if extraction.suggested_tags:
-        await store_suggested_tags(chunk_id, extraction.suggested_tags, extraction.suggestion_justifications)
-
-    # Return arc tags used in this chunk
-    return [t for t in doc.tags if t.startswith("arc:")]
 
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ models:
   summary: "gemini-2.5-flash-lite"
   router: "gemma4:e4b"             # Phase 3 - Gemma 4 local router via Ollama
   embedder: "mxbai-embed-large"    # Phase 4 - local embeddings via Ollama (1024 dimensions)
-  extractor: "gemini-2.5-flash"    # Phase 4 - RAG extraction (needs quality)
+  extractor: "gemini-2.5-flash"      # Phase 4 - RAG extraction (batch mode, needs quality + long output)
   arc_summarizer: "gemini-2.5-flash" # Phase 4 - arc summary generation
 
 gemini:
@@ -23,7 +23,7 @@ gemini:
   extraction:
     temperature: 0.1   # Low temp for structured JSON output — consistency matters here
     top_p: 0.9
-    max_output_tokens: 2000
+    max_output_tokens: 65536  # Batch mode: entire run in one call, may output thousands of tokens
   arc_summary:
     temperature: 0.5
     top_p: 0.9

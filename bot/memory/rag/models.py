@@ -189,6 +189,28 @@ class ExtractionResult(BaseModel):
     related_chunk_ids: list[str] = Field(default_factory=list)
 
 
+class SegmentExtractionResult(ExtractionResult):
+    """
+    One entry in the batch extraction response.
+
+    Extends ExtractionResult with the segment_index so the extractor can
+    map results back to segments even if the LLM skips some indices.
+    """
+    segment_index: int
+
+
+class BatchExtractionResult(BaseModel):
+    """
+    The top-level JSON object returned by the batch extractor LLM call.
+
+    The LLM produces exactly one of these per ingestion run, containing
+    one SegmentExtractionResult for every segment it decided is worth storing
+    (or explicitly marking worth_storing=false for those it skips).
+    Missing indices are treated as not worth storing.
+    """
+    extractions: list[SegmentExtractionResult]
+
+
 # ---------------------------------------------------------------------------
 # Contradiction checker output
 # ---------------------------------------------------------------------------
