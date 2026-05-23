@@ -32,6 +32,8 @@ class ModelsConfig:
     vision: str = "gemini-2.0-flash"
     summary: str = "gemini-2.5-flash-lite"
     router: str = "gemma4:e4b"
+    cone_approval: str = "gemma4:e4b"
+    rag_planner: str = "gemma4:e4b"
     embedder: str = "nomic-embed-text"
     extractor: str = "gemini-2.5-flash"
     arc_summarizer: str = "gemini-2.5-flash"
@@ -45,12 +47,25 @@ class GeminiGenerationConfig:
 
 
 @dataclass
+class OllamaGenerationConfig:
+    temperature: float = 0.1
+    num_predict: int = 128  # Ollama's equivalent of max_output_tokens
+
+
+@dataclass
 class GeminiConfig:
     chat: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.9, top_p=0.7, max_output_tokens=1000))
     vision: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.7, top_p=0.8, max_output_tokens=500))
     summary: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.3, top_p=0.9, max_output_tokens=500))
     extraction: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.1, top_p=0.9, max_output_tokens=2000))
     arc_summary: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.5, top_p=0.9, max_output_tokens=1500))
+
+
+@dataclass
+class OllamaConfig:
+    router: OllamaGenerationConfig = field(default_factory=lambda: OllamaGenerationConfig(temperature=0.1, num_predict=64))
+    rag_planner: OllamaGenerationConfig = field(default_factory=lambda: OllamaGenerationConfig(temperature=0.2, num_predict=512))
+    cone_approval: OllamaGenerationConfig = field(default_factory=lambda: OllamaGenerationConfig(temperature=0.2, num_predict=128))
 
 
 @dataclass
@@ -65,6 +80,10 @@ class ConeConfig:
     default_duration_minutes: int = 30
     max_duration_hours: int = 24
     permissions: list[str] = field(default_factory=list)
+    # Programmatic gate thresholds (Tier 0)
+    per_target_cooldown_minutes: int = 60
+    hourly_limit: int = 5
+    autonomous_max_per_day: int = 2
 
 
 @dataclass
@@ -102,12 +121,14 @@ class RagConfig:
     significance_weight: float = 0.4
     min_significance_filter: int = 1
     suggested_tag_collection: str = "rag_suggested_tags"
+    post_filter_disabled: bool = False  # Set true to skip $match post-filter (debug only)
 
 
 @dataclass
 class Config:
     models: ModelsConfig = field(default_factory=ModelsConfig)
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
+    ollama: OllamaConfig = field(default_factory=OllamaConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     cone: ConeConfig = field(default_factory=ConeConfig)
     bot: BotConfig = field(default_factory=BotConfig)
@@ -177,6 +198,22 @@ def _load_config() -> Config:
         default_duration_minutes=cone_raw.get("default_duration_minutes", 30),
         max_duration_hours=cone_raw.get("max_duration_hours", 24),
         permissions=[p.lower() for p in cone_raw.get("permissions", [])],
+        per_target_cooldown_minutes=int(cone_raw.get("per_target_cooldown_minutes", 60)),
+        hourly_limit=int(cone_raw.get("hourly_limit", 5)),
+        autonomous_max_per_day=int(cone_raw.get("autonomous_max_per_day", 2)),
+    )
+
+    # --- ollama ---
+    def _ollama_cfg(d: dict, default_temp: float = 0.1, default_predict: int = 128) -> OllamaGenerationConfig:
+        return OllamaGenerationConfig(
+            temperature=d.get("temperature", default_temp),
+            num_predict=d.get("num_predict", default_predict),
+        )
+    ollama_raw = raw.get("ollama", {})
+    ollama = OllamaConfig(
+        router=_ollama_cfg(ollama_raw.get("router", {}), default_temp=0.1, default_predict=64),
+        rag_planner=_ollama_cfg(ollama_raw.get("rag_planner", {}), default_temp=0.2, default_predict=512),
+        cone_approval=_ollama_cfg(ollama_raw.get("cone_approval", {}), default_temp=0.2, default_predict=128),
     )
 
     # --- bot ---
@@ -224,6 +261,7 @@ def _load_config() -> Config:
     return Config(
         models=models,
         gemini=gemini,
+        ollama=ollama,
         memory=memory,
         cone=cone,
         bot=bot,

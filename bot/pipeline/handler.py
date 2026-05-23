@@ -1,35 +1,41 @@
 """
 process_message() — the single orchestration point for all incoming messages.
 
-The platform layers (discord_bot, twitch_bot) call this function and get back
-a response string. They never touch routing, context building, or LLM calls.
+Phase 6 changes:
+  - Cone pipeline now uses a reactive two-call pattern:
+      1. generate_with_tools() — Ghost decides to cone and returns a ConeCallContext.
+      2. The approval pipeline runs, the cone is applied (or denied/errored).
+      3. send_tool_result() — Ghost generates a fresh response based on the actual outcome.
+  - Ghost never pre-writes responses; it reacts to what actually happened.
+  - All cone failures (denied, target unknown, apply error, unexpected exception)
+    produce a typed ConeOutcome that is fed back to Ghost for a natural reply.
 
-Responsibilities:
-- Build the system prompt via ContextBuilder.
-- Slice message history to the configured limit.
-- Call the appropriate LLM client (text or vision).
-- Return a clean, platform-length-capped response string.
-
-Out of scope (Phase 3+):
-- Intent routing via Gemma 4.
-- RAG context injection.
-- Tool calling by the LLM.
+Platform layers (discord_bot, twitch_bot) call this function and receive
+a plain response string.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 import re
+
 from typing import Optional
 
 from ..utils.config import get_config
-from ..utils.exceptions import LLMRateLimitError, LLMError
+from ..utils.exceptions import LLMRateLimitError, LLMError, ConeEffectNotFoundError
 from ..utils.llm import get_llm_client
-from ..utils.llm.gemini import GeminiClient
-from ..utils.models import Platform, UserState
+from ..utils.llm.gemini import GeminiClient, ConeCallContext
+from ..utils.models import ConeOutcome, Platform, RetrievedChunk, TaxonomySnapshot, UserState
 from ..memory.state import StateManager
+from ..memory.rag import retrieve, format_for_injection
+from ..cone import apply_effect
+from ..cone.effects.registry import resolve as resolve_effect
 from .context import ContextBuilder
+from .router import IntentRouter
+from .rag_planner import RAGQueryPlanner
+from .cone_approval import run_cone_approval, record_cone_applied
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +50,50 @@ _RATE_LIMIT_RESPONSES = [
 ]
 
 _ERROR_RESPONSES = [
-    "Ugh, whatever. I'm not in the mood right now.",
-    "Can't be bothered right now.",
-    "I'm not in the mood right now.",
-    "Bother me later.",
-    "Can't it wait? I'm busy.",
+    "I feel some disturbance in the air... is it a bird? is it a plane? no! it's goomber fucking shit up again. broke my comms. ttyl.",
+    "something broke on my end and i'm like 90% sure it's goomber. he does this. constantly.",
+    "my brain just stopped working for a sec. goomber probably tripped over a server cable or something. give me a moment.",
+    "ugh, comms are down. i blame goomber. i always blame goomber. it's almost always goomber.",
+    "okay so that didn't work. goomber's been poking at the mothership console again hasn't he.",
+    "i tried to respond and literally nothing happened. classic goomber energy.",
+    "signal lost. goomber moment. try again in a bit.",
+    "hold on something's wrong with my... everything. goomber. it's goomber. i know it.",
+    "can't reach my brain rn. either goomber broke something or i'm having an existential moment. probably goomber.",
 ]
 
+# Module-level singleton router and taxonomy cache
+_router = IntentRouter()
+_taxonomy_snapshot: Optional[TaxonomySnapshot] = None
+_taxonomy_lock = asyncio.Lock()
+
+
+async def get_taxonomy(force_refresh: bool = False) -> TaxonomySnapshot:
+    """
+    Return the cached TaxonomySnapshot, building it on first call.
+
+    Thread-safe via asyncio.Lock. Call with force_refresh=True after ingestion.
+    """
+    global _taxonomy_snapshot
+    async with _taxonomy_lock:
+        if _taxonomy_snapshot is None or force_refresh:
+            try:
+                from ..memory.rag.store import get_taxonomy_snapshot
+                _taxonomy_snapshot = await get_taxonomy_snapshot()
+                logger.info(
+                    "Taxonomy snapshot loaded: %d individuals, %d arc tags, %d doc types.",
+                    len(_taxonomy_snapshot.known_individuals),
+                    len(_taxonomy_snapshot.arc_tags),
+                    len(_taxonomy_snapshot.doc_type_counts),
+                )
+            except Exception as exc:
+                logger.warning("Failed to build taxonomy snapshot (%s) — using empty.", exc)
+                _taxonomy_snapshot = TaxonomySnapshot()
+    return _taxonomy_snapshot
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 async def process_message(
     platform: Platform,
@@ -58,6 +101,7 @@ async def process_message(
     message: str,
     state_manager: StateManager,
     context_builder: ContextBuilder,
+    cone_manager=None,
     image_urls: Optional[list[str]] = None,
 ) -> str:
     """
@@ -69,43 +113,92 @@ async def process_message(
         message:          Raw message content.
         state_manager:    Shared state manager (for mentioned-user lookups).
         context_builder:  Pre-built ContextBuilder instance.
+        cone_manager:     Active ConeManager instance (required for cone flow).
         image_urls:       Optional list of image attachment URLs (Discord only).
 
     Returns:
         A response string, already capped to the platform's max message length.
+        The caller is responsible for saving this string to chat history.
     """
     cfg = get_config()
 
     # ------------------------------------------------------------------
-    # 1. Build mentioned-user context
+    # 1. Run the intent router (fast local classification)
     # ------------------------------------------------------------------
-    mentioned_names = context_builder.extract_mentioned_usernames(message)
-    mentioned_states: list[tuple[str, UserState]] = []
-    for name in mentioned_names:
-        username_lower = name.lower()
-        # Skip if it's the sender themselves
-        if username_lower == user_state.primary_identity.username.lower():
-            continue
-        # Look up via state manager's username search
-        discord_id = state_manager.find_discord_id_by_username(name)
-        if discord_id:
-            platform_key = f"discord_{discord_id}"
-            mention_state = state_manager._users.get(platform_key)
-            if mention_state:
-                mentioned_states.append((name, mention_state))
+    flags = await _router.classify(
+        message,
+        recent_messages=list(user_state.recent_messages[-4:]),
+    )
+    logger.debug("RouterFlags: rag=%s, cone=%s", flags.rag_required, flags.cone_relevant)
 
     # ------------------------------------------------------------------
-    # 2. Build system prompt
+    # 2. Build mentioned-user context
     # ------------------------------------------------------------------
+    sender_discord_id = (
+        user_state.identifiers["discord"].user_id
+        if "discord" in user_state.identifiers else ""
+    )
+
+    # Pass A: explicit @mentions + special_users.json variants
+    mentioned_discord_ids: set[str] = set()
+    for name_or_id in context_builder.extract_mentioned_usernames(message):
+        discord_id = state_manager.find_discord_id_by_username(name_or_id)
+        if discord_id and discord_id != sender_discord_id:
+            mentioned_discord_ids.add(discord_id)
+
+    # Pass B: free-text alias/name scan (exact + fuzzy at 0.80 cutoff)
+    for discord_id in state_manager.scan_message_for_users(
+        message, exclude_discord_id=sender_discord_id or None
+    ):
+        mentioned_discord_ids.add(discord_id)
+
+    # Build (display_name, UserState) pairs, deduped by object identity
+    mentioned_states: list[tuple[str, UserState]] = []
+    seen_mention_obj_ids: set[int] = set()
+    for discord_id in mentioned_discord_ids:
+        mention_state = state_manager._users.get(f"discord_{discord_id}")
+        if mention_state and id(mention_state) not in seen_mention_obj_ids:
+            seen_mention_obj_ids.add(id(mention_state))
+            discord_identity = mention_state.identifiers.get("discord")
+            display = (
+                discord_identity.display_name or discord_identity.username
+                if discord_identity else mention_state.primary_name
+            )
+            mentioned_states.append((display, mention_state))
+
+    # ------------------------------------------------------------------
+    # 3. Parallel: RAG retrieval (if needed)
+    # ------------------------------------------------------------------
+    rag_chunks: list[RetrievedChunk] = []
+    if flags.rag_required and cfg.rag.enabled:
+        try:
+            taxonomy = await get_taxonomy()
+            planner = RAGQueryPlanner(taxonomy)
+            query = await planner.plan(message)
+            rag_chunks = await retrieve(query, taxonomy=taxonomy)
+            # Filter out low-quality chunks (significance < 2 if all are low)
+            if rag_chunks and all(c.significance < 2 for c in rag_chunks):
+                logger.debug("All RAG chunks have low significance — skipping injection.")
+                rag_chunks = []
+        except Exception as exc:
+            logger.warning("RAG retrieval failed (%s) — continuing without context.", exc)
+
+    # ------------------------------------------------------------------
+    # 4. Build system prompt
+    # ------------------------------------------------------------------
+    rag_context = format_for_injection(rag_chunks) if rag_chunks else ""
+
     system_prompt = context_builder.build_system_prompt(
         user_state=user_state,
         platform=platform,
         current_message=message,
         mentioned_user_states=mentioned_states if mentioned_states else None,
+        rag_context=rag_context or None,
+        cone_requested=flags.cone_relevant,
     )
 
     # ------------------------------------------------------------------
-    # 3. Build conversation history (sliced to history limit)
+    # 5. Build conversation history (sliced to history limit)
     # ------------------------------------------------------------------
     history_limit = cfg.memory.message_history_limit
     recent = user_state.recent_messages[-history_limit:]
@@ -113,34 +206,44 @@ async def process_message(
     messages: list[dict] = []
     for msg in recent:
         role = "model" if msg.from_bot else "user"
-        # Strip leftover markdown / chain-of-thought from bot messages
         content = _clean_bot_message(msg.content) if msg.from_bot else msg.content
         if content:
             messages.append({"role": role, "content": content})
 
-    # Append the current message
     messages.append({"role": "user", "content": message})
 
     # ------------------------------------------------------------------
-    # 4. Call the LLM
+    # 6. Call the LLM
     # ------------------------------------------------------------------
     try:
         if image_urls:
+            # Vision path: no tool calling (images + tools can conflict on some models)
             vision_client = get_llm_client("vision")
             if not isinstance(vision_client, GeminiClient):
-                logger.error("Vision client is not a GeminiClient — cannot process images.")
+                logger.error("Vision client is not GeminiClient — cannot process images.")
                 return random.choice(_ERROR_RESPONSES)
             response_text = await vision_client.generate_with_images(
                 messages=messages,
                 image_urls=image_urls,
                 system_prompt=system_prompt,
             )
+            cone_call = None
         else:
             chat_client = get_llm_client("chat")
-            response_text = await chat_client.generate(
-                messages=messages,
-                system_prompt=system_prompt,
-            )
+            if not isinstance(chat_client, GeminiClient):
+                # Fallback for unexpected client type
+                response_text = await chat_client.generate(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                )
+                cone_call = None
+            else:
+                # Primary path: tool-calling mode
+                cone_call, response_text = await chat_client.generate_with_tools(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                )
+
     except LLMRateLimitError:
         logger.warning("LLM rate limit hit.")
         return random.choice(_RATE_LIMIT_RESPONSES)
@@ -149,10 +252,45 @@ async def process_message(
         return random.choice(_ERROR_RESPONSES)
 
     # ------------------------------------------------------------------
-    # 5. Clean and cap the response
+    # 7. Handle cone tool call (if Gemini used initiate_cone)
     # ------------------------------------------------------------------
-    response_text = _clean_response(response_text)
-    if not response_text:
+    final_text: str
+    if cone_call is not None and cone_manager is not None:
+        final_text = await _handle_cone_call(
+            cone_ctx=cone_call,
+            requester_state=user_state,
+            recent_messages=list(recent),
+            cone_manager=cone_manager,
+            state_manager=state_manager,
+            chat_client=chat_client,
+            messages=messages,
+            system_prompt=system_prompt,
+        )
+    elif cone_call is not None and cone_manager is None:
+        # Platform does not support cone operations (e.g. Twitch).
+        # Feed a denial outcome back to Ghost so it can respond naturally.
+        denial_outcome = ConeOutcome(
+            status="denied",
+            target=cone_call.call.cone_target,
+            reason="Cone operations are not available on this platform.",
+        )
+        try:
+            final_text = await chat_client.send_tool_result(
+                messages=messages,
+                system_prompt=system_prompt,
+                raw_model_content=cone_call.raw_model_content,
+                outcome=denial_outcome,
+            )
+        except Exception:
+            final_text = random.choice(_ERROR_RESPONSES)
+    else:
+        final_text = response_text or ""
+
+    # ------------------------------------------------------------------
+    # 8. Clean and cap the response
+    # ------------------------------------------------------------------
+    final_text = _clean_response(final_text)
+    if not final_text:
         return random.choice(_ERROR_RESPONSES)
 
     max_len = (
@@ -160,10 +298,156 @@ async def process_message(
         if platform == Platform.DISCORD
         else cfg.twitch.max_message_length
     )
-    if len(response_text) > max_len:
-        response_text = response_text[: max_len - 3] + "..."
+    if len(final_text) > max_len:
+        final_text = final_text[: max_len - 3] + "..."
 
-    return response_text
+    return final_text
+
+
+# ---------------------------------------------------------------------------
+# Cone call handler
+# ---------------------------------------------------------------------------
+
+async def _handle_cone_call(
+    cone_ctx: ConeCallContext,
+    requester_state: UserState,
+    recent_messages: list,
+    cone_manager,
+    state_manager: StateManager,
+    chat_client: GeminiClient,
+    messages: list[dict],
+    system_prompt: str,
+) -> str:
+    """
+    Run the full cone pipeline and return Ghost's reactive response.
+
+    Flow:
+        1. Validate effect + trigger.
+        2. Run two-tier approval pipeline.
+        3. Attempt apply (if approved).
+        4. Build a typed ConeOutcome describing the actual result.
+        5. Feed the outcome back via chat_client.send_tool_result().
+        6. Return Ghost's fresh, contextual response.
+
+    All failure modes (denied, target unknown, apply error, unexpected exception)
+    produce a ConeOutcome so Ghost can react naturally to every scenario.
+    Goomber blame strings are the last-resort fallback if send_tool_result fails.
+    """
+    cone_call = cone_ctx.call
+    requester_username = requester_state.primary_identity.username or ""
+
+    # 1. Validate effect (default to uwu on unknown)
+    try:
+        canonical_effect = resolve_effect(cone_call.cone_effect)
+    except Exception:
+        logger.warning("Unknown cone effect '%s' — defaulting to 'uwu'.", cone_call.cone_effect)
+        canonical_effect = "uwu"
+
+    # 2. Validate trigger
+    valid_triggers = {"requested_approved", "requested_unapproved", "autonomous"}
+    cone_trigger = cone_call.cone_trigger if cone_call.cone_trigger in valid_triggers else "autonomous"
+
+    # 3. Run two-tier approval
+    approval = await run_cone_approval(
+        cone_target=cone_call.cone_target,
+        cone_trigger=cone_trigger,
+        cone_effect=canonical_effect,
+        requester_username=requester_username,
+        recent_messages=recent_messages,
+        requester_state=requester_state,
+        cone_manager=cone_manager,
+    )
+
+    # 4. Build ConeOutcome based on result
+    if not approval.approved:
+        logger.debug(
+            "Cone denied for %s (%s): %s",
+            cone_call.cone_target, cone_trigger, approval.reason,
+        )
+        outcome = ConeOutcome(
+            status="denied",
+            target=cone_call.cone_target,
+            effect=canonical_effect,
+            reason=approval.reason,
+        )
+    else:
+        # Resolve target → Discord ID
+        target_discord_id = cone_manager.find_discord_id_by_username(cone_call.cone_target)
+        if not target_discord_id:
+            logger.warning(
+                "Could not resolve cone target '%s' to a Discord ID.",
+                cone_call.cone_target,
+            )
+            outcome = ConeOutcome(
+                status="target_unknown",
+                target=cone_call.cone_target,
+                effect=canonical_effect,
+                reason=(
+                    f"Could not find '{cone_call.cone_target}' in Discord. "
+                    "Ask the user to @mention them or use their exact username."
+                ),
+            )
+        else:
+            # Attempt apply — catch all exceptions
+            try:
+                result = await cone_manager.apply(
+                    discord_id=target_discord_id,
+                    effect=canonical_effect,
+                    applied_by=requester_username,
+                    reason=cone_trigger,
+                    duration=cone_call.cone_duration,
+                    condition=cone_call.cone_condition,
+                )
+            except Exception as exc:
+                logger.error(
+                    "ConeManager.apply() raised unexpectedly for target '%s': %s",
+                    cone_call.cone_target, exc, exc_info=True,
+                )
+                outcome = ConeOutcome(
+                    status="error",
+                    target=cone_call.cone_target,
+                    effect=canonical_effect,
+                    reason="A technical error occurred while applying the cone.",
+                )
+            else:
+                if result.success:
+                    record_cone_applied(cone_call.cone_target, cone_trigger)
+                    logger.info(
+                        "Cone applied: %s → %s (%s), trigger=%s",
+                        canonical_effect, cone_call.cone_target, target_discord_id, cone_trigger,
+                    )
+                    outcome = ConeOutcome(
+                        status="applied",
+                        target=cone_call.cone_target,
+                        effect=canonical_effect,
+                        duration=cone_call.cone_duration,
+                        condition=cone_call.cone_condition,
+                        reason=approval.reason,
+                    )
+                else:
+                    logger.warning("ConeManager.apply() returned failure: %s", result.message)
+                    outcome = ConeOutcome(
+                        status="apply_failed",
+                        target=cone_call.cone_target,
+                        effect=canonical_effect,
+                        reason=result.message,
+                    )
+
+    # 5. Feed outcome back to Ghost and get a fresh, reactive response
+    try:
+        response = await chat_client.send_tool_result(
+            messages=messages,
+            system_prompt=system_prompt,
+            raw_model_content=cone_ctx.raw_model_content,
+            outcome=outcome,
+        )
+        return response
+    except LLMRateLimitError:
+        logger.warning("Rate limit hit during cone tool_result follow-up.")
+        return random.choice(_RATE_LIMIT_RESPONSES)
+    except Exception as exc:
+        logger.error("send_tool_result failed: %s", exc, exc_info=True)
+        return random.choice(_ERROR_RESPONSES)
 
 
 # ---------------------------------------------------------------------------

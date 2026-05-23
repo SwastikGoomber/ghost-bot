@@ -31,24 +31,13 @@ from ..utils.models import Platform
 from ..memory.state import StateManager
 from ..cone.manager import ConeManager
 from ..pipeline.context import ContextBuilder
-from ..pipeline.handler import process_message
+from ..pipeline.handler import process_message, _ERROR_RESPONSES, _RATE_LIMIT_RESPONSES
 
 logger = logging.getLogger(__name__)
 
-# Responses that must NOT be saved to conversation history
-_NON_INTERACTION_RESPONSES = {
-    "Mom says I gotta sleep. Whatever.",
-    "I'm done for today, peace.",
-    "Gonna go blast some music and sleep",
-    "That's enough social interaction for one day",
-    "Calling it. See ya tomorrow I guess",
-    "Done with today. Later.",
-    "Ugh, whatever. I'm not in the mood right now.",
-    "Can't be bothered right now.",
-    "I'm not in the mood right now.",
-    "Bother me later.",
-    "Can't it wait? I'm busy.",
-}
+# Responses that must NOT be saved to conversation history.
+# Built from handler's error/rate-limit pools so adding variants there auto-propagates here.
+_NON_INTERACTION_RESPONSES: set[str] = set(_ERROR_RESPONSES) | set(_RATE_LIMIT_RESPONSES)
 
 
 class GhostDiscordBot(commands.Bot):
@@ -206,6 +195,7 @@ class GhostDiscordBot(commands.Bot):
             message=message.content,
             state_manager=self._state,
             context_builder=self._ctx_builder,
+            cone_manager=self._cone,
             image_urls=image_urls or None,
         )
 
@@ -353,7 +343,7 @@ class GhostDiscordBot(commands.Bot):
             interaction: discord.Interaction,
             username: Optional[str] = None,
         ) -> None:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
             platform_key = f"discord_{interaction.user.id}"
 
             if username:
@@ -367,6 +357,89 @@ class GhostDiscordBot(commands.Bot):
             target = username or interaction.user.name
             prefix = "✓" if success else "✗"
             await interaction.followup.send(f"{prefix} {msg} ({target})")
+
+        # ------------------------------------------------------------------
+        # /ghost set — user profile commands
+        # ------------------------------------------------------------------
+
+        ghost_group = discord.app_commands.Group(
+            name="ghost",
+            description="Ghost Bot profile commands",
+        )
+        set_group = discord.app_commands.Group(
+            name="set",
+            description="Update your Ghost Bot profile",
+            parent=ghost_group,
+        )
+
+        @set_group.command(name="alias", description="Set your aliases (comma-separated nicknames Ghost will recognise)")
+        @discord.app_commands.describe(aliases="Comma-separated list, e.g. 'goomber, swas, swastik'")
+        async def set_alias(
+            interaction: discord.Interaction,
+            aliases: str,
+        ) -> None:
+            state, _ = await self._state.get_user_state(
+                user_id=str(interaction.user.id),
+                username=interaction.user.name,
+                platform="discord",
+                nickname=interaction.user.display_name,
+            )
+            parsed = [a.strip() for a in aliases.split(",") if a.strip()]
+            state.aliases = parsed
+            # Merge aliases into name_variants so resolution works immediately
+            existing = set(state.name_variants)
+            for alias in parsed:
+                existing.add(alias.lower())
+            state.name_variants = list(existing)
+            await self._state.save_states()
+            logger.info("[/ghost set alias] %s set aliases: %s", interaction.user.name, parsed)
+            await interaction.response.send_message(
+                f"✓ Aliases updated: {', '.join(parsed)}", ephemeral=True
+            )
+
+        @set_group.command(name="pronouns", description="Set your pronouns (comma-separated)")
+        @discord.app_commands.describe(pronouns="Comma-separated list, e.g. 'she/her, they/them'")
+        async def set_pronouns(
+            interaction: discord.Interaction,
+            pronouns: str,
+        ) -> None:
+            state, _ = await self._state.get_user_state(
+                user_id=str(interaction.user.id),
+                username=interaction.user.name,
+                platform="discord",
+                nickname=interaction.user.display_name,
+            )
+            parsed = [p.strip() for p in pronouns.split(",") if p.strip()]
+            state.pronouns = parsed
+            await self._state.save_states()
+            logger.info("[/ghost set pronouns] %s set pronouns: %s", interaction.user.name, parsed)
+            await interaction.response.send_message(
+                f"✓ Pronouns updated: {', '.join(parsed)}", ephemeral=True
+            )
+
+        @set_group.command(name="bio", description="Set a short bio that Ghost will know about you")
+        @discord.app_commands.describe(bio="A short paragraph about yourself")
+        async def set_bio(
+            interaction: discord.Interaction,
+            bio: str,
+        ) -> None:
+            if len(bio) > 500:
+                await interaction.response.send_message(
+                    "Bio must be 500 characters or fewer.", ephemeral=True
+                )
+                return
+            state, _ = await self._state.get_user_state(
+                user_id=str(interaction.user.id),
+                username=interaction.user.name,
+                platform="discord",
+                nickname=interaction.user.display_name,
+            )
+            state.bio = bio.strip()
+            await self._state.save_states()
+            logger.info("[/ghost set bio] %s updated bio.", interaction.user.name)
+            await interaction.response.send_message("✓ Bio updated.", ephemeral=True)
+
+        self.tree.add_command(ghost_group)
 
         # Sync commands globally
         try:

@@ -1,10 +1,12 @@
 models:
-  chat: "gemini-2.5-flash-lite"
+  chat: "gemini-3.1-flash-lite"
   vision: "gemini-2.0-flash"
-  summary: "gemini-2.5-flash-lite"
-  router: "gemma4:e4b"             # Phase 3 - Gemma 4 local router via Ollama
+  summary: "gemini-2.5-flash"
+  router: "gemma4:e4b"             # Phase 5 - Gemma 4 local router via Ollama
+  cone_approval: "gemma4:e4b"      # Phase 5 - Gemma 4 local cone approval agent via Ollama
+  rag_planner: "gemma4:e4b"        # Phase 5 - Gemma 4 local RAG query planner via Ollama
   embedder: "mxbai-embed-large"    # Phase 4 - local embeddings via Ollama (1024 dimensions)
-  extractor: "gemini-2.5-flash"      # Phase 4 - RAG extraction (batch mode, needs quality + long output)
+  extractor: "gemini-2.5-flash"    # Phase 4 - RAG extraction (batch mode, needs quality + long output)
   arc_summarizer: "gemini-2.5-flash" # Phase 4 - arc summary generation
 
 gemini:
@@ -29,6 +31,17 @@ gemini:
     top_p: 0.9
     max_output_tokens: 1500
 
+ollama:
+  router:
+    temperature: 0.1  # Low temp — this is classification, not creativity
+    num_predict: 256  # Small JSON but Gemma may emit preamble tokens before it
+  rag_planner:
+    temperature: 0.2
+    num_predict: 1024  # RetrievalQuery JSON can be moderately large
+  cone_approval:
+    temperature: 0.2
+    num_predict: 2048  # Gemma 4 E4B thinking tokens count toward this limit; needs headroom
+
 memory:
   message_history_limit: 15
   summary_trigger_count: 50
@@ -43,6 +56,10 @@ cone:
     - "river333"
     - "dulcibel"
     - "yostiiii"
+  # Programmatic gate thresholds (Tier 0)
+  per_target_cooldown_minutes: 20   # Min time between cones on the same target
+  hourly_limit: 10                  # Max total cones applied in any rolling 60-min window
+  autonomous_max_per_day: 5         # Hard cap on Ghost-initiated autonomous cones per day
 
 bot:
   name: "Ghost"
@@ -69,7 +86,7 @@ twitch:
   max_message_length: 500
 
 rag:
-  enabled: false                # Set to true once Ollama + nomic-embed-text is running
+  enabled: true                # Set to true once Ollama + nomic-embed-text is running
   enabled_channel_ids: []       # Add Discord channel IDs to ingest here
 
   # Ingestion schedule — daily at 6:00 AM IST (00:30 UTC)
@@ -90,6 +107,7 @@ rag:
   vector_weight: 0.6             # Weight for cosine similarity in final score
   significance_weight: 0.4       # Weight for significance score in final score
   min_significance_filter: 1     # Exclude chunks below this significance
+  post_filter_disabled: false    # Set to true to skip $match post-filter (debug only)
 
   # Suggested tag review queue (MongoDB collection name)
   suggested_tag_collection: "rag_suggested_tags"

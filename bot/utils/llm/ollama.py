@@ -28,9 +28,17 @@ logger = logging.getLogger(__name__)
 class OllamaClient(LLMClient):
     """Client for local Ollama models."""
 
-    def __init__(self, model: str, base_url: str = "http://localhost:11434") -> None:
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "http://localhost:11434",
+        temperature: float = 0.1,
+        num_predict: int = 128,
+    ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
+        self.temperature = temperature
+        self.num_predict = num_predict
 
     # ------------------------------------------------------------------
     # Text generation — /api/chat
@@ -68,6 +76,10 @@ class OllamaClient(LLMClient):
             "model": self.model,
             "messages": ollama_messages,
             "stream": False,
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.num_predict,
+            },
         }
 
         try:
@@ -83,7 +95,14 @@ class OllamaClient(LLMClient):
                             f"Ollama /api/chat returned HTTP {resp.status}: {body}"
                         )
                     data = await resp.json()
-                    return data["message"]["content"]
+                    content = data["message"]["content"]
+                    logger.debug(
+                        "[Ollama:chat] model=%s | prompt_tokens=%s | response: %r",
+                        self.model,
+                        data.get("prompt_eval_count", "?"),
+                        content[:500],
+                    )
+                    return content
         except aiohttp.ClientConnectorError as exc:
             raise LLMError(
                 f"Cannot reach Ollama at {self.base_url}. "
@@ -91,6 +110,84 @@ class OllamaClient(LLMClient):
             ) from exc
         except (KeyError, TypeError) as exc:
             raise LLMError(f"Unexpected response shape from Ollama: {exc}") from exc
+
+    # ------------------------------------------------------------------
+    # JSON generation — /api/chat with format="json"
+    # ------------------------------------------------------------------
+
+    async def generate_json(
+        self,
+        messages: list[dict],
+        system_prompt: str = "",
+    ) -> str:
+        """
+        Generate a JSON-mode response from Ollama.
+
+        Same as generate() but sets format="json" in the payload, which instructs
+        Ollama to constrain the model's output to valid JSON.
+
+        Args:
+            messages:      Conversation history.
+            system_prompt: System context — should describe the expected JSON schema.
+
+        Returns:
+            Raw JSON string.
+
+        Raises:
+            LLMError: if Ollama is unreachable or returns an error.
+        """
+        ollama_messages: list[dict] = []
+        if system_prompt:
+            ollama_messages.append({"role": "system", "content": system_prompt})
+        for msg in messages:
+            role = msg.get("role", "user")
+            if role == "model":
+                role = "assistant"
+            ollama_messages.append({"role": role, "content": msg.get("content", "")})
+
+        payload = {
+            "model": self.model,
+            "messages": ollama_messages,
+            "stream": False,
+            "format": "json",
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.num_predict,
+            },
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                logger.debug(
+                    "[Ollama:json] model=%s num_predict=%d | sending %d messages",
+                    self.model, self.num_predict, len(payload["messages"]),
+                )
+                async with session.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        raise LLMError(
+                            f"Ollama /api/chat (JSON mode) returned HTTP {resp.status}: {body}"
+                        )
+                    data = await resp.json()
+                    content = data["message"]["content"]
+                    logger.debug(
+                        "[Ollama:json] model=%s | eval_count=%s | raw_response: %r",
+                        self.model,
+                        data.get("eval_count", "?"),
+                        content[:500],
+                    )
+                    return content
+        except aiohttp.ClientConnectorError as exc:
+            raise LLMError(
+                f"Cannot reach Ollama at {self.base_url}. "
+                "Is Ollama running? (ollama serve)"
+            ) from exc
+        except (KeyError, TypeError) as exc:
+            raise LLMError(f"Unexpected Ollama JSON response shape: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Embeddings — /api/embed

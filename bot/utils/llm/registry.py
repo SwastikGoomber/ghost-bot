@@ -11,8 +11,10 @@ Roles:
     "summary"       → GeminiClient (models.summary, summary generation config)
     "extractor"     → GeminiClient (models.extractor, extraction config) — Phase 4 RAG
     "arc_summarizer"→ GeminiClient (models.arc_summarizer, arc_summary config) — Phase 4 RAG
-    "router"        → OllamaClient (models.router)   — Phase 3
-    "embed"         → OllamaClient (models.embedder) — Phase 4
+    "router"        → OllamaClient (models.router)        — Phase 5
+    "rag_planner"   → OllamaClient (models.rag_planner)  — Phase 5
+    "cone_approval" → OllamaClient (models.cone_approval) — Phase 5
+    "embed"         → OllamaClient (models.embedder)      — Phase 4
 """
 
 from __future__ import annotations
@@ -69,17 +71,31 @@ def _get_cached_client(role: str) -> LLMClient:
             max_output_tokens=gen.max_output_tokens,
         )
 
-    if role == "router":
-        # Phase 3 — Gemma 4 via Ollama
+    if role in ("router", "rag_planner", "cone_approval"):
+        # Phase 5 — Gemma 4 via Ollama
         ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        return OllamaClient(model=cfg.models.router, base_url=ollama_url)
+        if role == "router":
+            model = cfg.models.router
+            gen = cfg.ollama.router
+        elif role == "rag_planner":
+            model = cfg.models.rag_planner
+            gen = cfg.ollama.rag_planner
+        else:  # cone_approval
+            model = cfg.models.cone_approval
+            gen = cfg.ollama.cone_approval
+        return OllamaClient(
+            model=model,
+            base_url=ollama_url,
+            temperature=gen.temperature,
+            num_predict=gen.num_predict,
+        )
 
     if role == "embed":
-        # Phase 4 — nomic-embed-text via Ollama
+        # Phase 4 — nomic-embed-large via Ollama
         ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
         return OllamaClient(model=cfg.models.embedder, base_url=ollama_url)
 
     raise ConfigError(
         f"Unknown LLM role '{role}'. Valid roles: chat, vision, summary, "
-        "extractor, arc_summarizer, router, embed."
+        "extractor, arc_summarizer, router, rag_planner, cone_approval, embed."
     )

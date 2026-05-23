@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -46,6 +47,21 @@ from . import db as _db_module
 logger = logging.getLogger(__name__)
 
 _FALLBACK_FILE = "user_states.json"
+
+# Common English words that will never be a username/alias.
+# Kept intentionally short — only words likely to appear as >= 4-char tokens
+# that could accidentally fuzzy-match a short username.
+_TEXT_SCAN_STOP_WORDS: frozenset[str] = frozenset({
+    "have", "just", "like", "that", "this", "with", "from", "they",
+    "them", "been", "will", "your", "what", "when", "where", "know",
+    "think", "about", "really", "would", "could", "should", "their",
+    "some", "then", "than", "more", "said", "come", "into", "time",
+    "does", "good", "here", "over", "back", "also", "well", "even",
+    "only", "through", "before", "after", "never", "always", "very",
+    "just", "were", "with", "which", "there", "while", "those", "these",
+    "both", "make", "made", "much", "most", "such", "each", "same",
+    "ghost",  # Ghost itself — never a cone/mention target in text scan
+})
 
 
 class StateManager:
@@ -413,6 +429,86 @@ class StateManager:
         return True
 
     # ------------------------------------------------------------------
+    # Text mention scanning
+    # ------------------------------------------------------------------
+
+    def scan_message_for_users(
+        self,
+        message: str,
+        exclude_discord_id: Optional[str] = None,
+    ) -> list[str]:
+        """
+        Scan free-form text for user mentions by name, variant, or alias.
+
+        Two passes:
+        1. Exact lookup against a pre-built name → discord_id map  (O(1) per word)
+        2. Fuzzy fallback via difflib (cutoff=0.80) for near-exact mentions
+
+        The 0.80 cutoff is intentionally strict here — false positives in text
+        context injection are worse than false negatives. Explicit aliases set via
+        /ghost set alias are caught in pass 1.
+
+        Args:
+            message:             Raw message text to scan.
+            exclude_discord_id:  Sender's discord_id — excluded from results.
+
+        Returns:
+            List of discord_ids for users mentioned in the message.
+        """
+        from difflib import get_close_matches
+
+        # Build candidate map: lowered_name → discord_id
+        candidate_map: dict[str, str] = {}
+        seen_obj_ids: set[int] = set()
+        for state in self._users.values():
+            if id(state) in seen_obj_ids or "discord" not in state.identifiers:
+                continue
+            seen_obj_ids.add(id(state))
+            discord_id = state.identifiers["discord"].user_id
+            if exclude_discord_id and discord_id == exclude_discord_id:
+                continue
+            for identity in state.identifiers.values():
+                for field in (identity.username, identity.nickname, identity.display_name):
+                    if field:
+                        candidate_map[field.lower()] = discord_id
+            for variant in state.name_variants:
+                if variant:
+                    candidate_map[variant] = discord_id
+            for alias in state.aliases:
+                if alias:
+                    candidate_map[alias.lower()] = discord_id
+
+        if not candidate_map:
+            return []
+
+        all_candidates = list(candidate_map.keys())
+
+        # Extract words >= 4 chars, skipping common English words
+        words = re.findall(r"\b\w{4,}\b", message.lower())
+        words = [w for w in words if w not in _TEXT_SCAN_STOP_WORDS]
+
+        found_ids: set[str] = set()
+        fuzzy_queue: list[str] = []
+
+        for word in words:
+            if word in candidate_map:
+                found_ids.add(candidate_map[word])
+            else:
+                fuzzy_queue.append(word)
+
+        # Fuzzy pass — only on words that missed the exact scan
+        for word in fuzzy_queue:
+            matches = get_close_matches(word, all_candidates, n=1, cutoff=0.80)
+            if matches:
+                logger.debug(
+                    "scan_message_for_users: fuzzy '%s' → '%s' (discord_id=%s)",
+                    word, matches[0], candidate_map[matches[0]],
+                )
+                found_ids.add(candidate_map[matches[0]])
+
+        return list(found_ids)
+
+    # ------------------------------------------------------------------
     # Cone-related helpers (used by ConeManager)
     # ------------------------------------------------------------------
 
@@ -426,10 +522,21 @@ class StateManager:
         return f"User{discord_id}"
 
     def find_discord_id_by_username(self, username: str) -> Optional[str]:
-        """Look up a Discord ID by any known username/nickname across all platforms."""
+        """
+        Look up a Discord ID by any known username/nickname/alias across all platforms.
+
+        Resolution order:
+        1. Exact match on username / nickname / display_name
+        2. Match against stored name_variants (includes separator-split parts)
+        3. Fuzzy match via difflib (cutoff=0.65) — catches partial names like 'goomber'
+        """
+        from difflib import get_close_matches
+
         username_lower = username.lower()
+
+        # --- Pass 1: exact field match ---
         for state in self._users.values():
-            for platform, identity in state.identifiers.items():
+            for identity in state.identifiers.values():
                 if (
                     identity.username.lower() == username_lower
                     or (identity.nickname and identity.nickname.lower() == username_lower)
@@ -437,6 +544,45 @@ class StateManager:
                 ):
                     if "discord" in state.identifiers:
                         return state.identifiers["discord"].user_id
+
+        # --- Pass 2: name_variants + user-set aliases match ---
+        seen_ids: set[int] = set()
+        for state in self._users.values():
+            if id(state) in seen_ids:
+                continue
+            seen_ids.add(id(state))
+            all_variants = set(state.name_variants) | {a.lower() for a in state.aliases}
+            if username_lower in all_variants and "discord" in state.identifiers:
+                logger.debug(
+                    "find_discord_id_by_username: variant/alias match '%s' → %s",
+                    username, state.identifiers["discord"].user_id,
+                )
+                return state.identifiers["discord"].user_id
+
+        # --- Pass 3: fuzzy fallback ---
+        candidate_map: dict[str, str] = {}  # lowered_name → discord_id
+        seen_ids2: set[int] = set()
+        for state in self._users.values():
+            if id(state) in seen_ids2 or "discord" not in state.identifiers:
+                continue
+            seen_ids2.add(id(state))
+            discord_id = state.identifiers["discord"].user_id
+            for identity in state.identifiers.values():
+                for field in (identity.username, identity.nickname, identity.display_name):
+                    if field:
+                        candidate_map[field.lower()] = discord_id
+            for variant in state.name_variants:
+                if variant:
+                    candidate_map[variant] = discord_id
+
+        matches = get_close_matches(username_lower, list(candidate_map), n=1, cutoff=0.65)
+        if matches:
+            logger.debug(
+                "find_discord_id_by_username: fuzzy match '%s' → '%s' (discord_id=%s)",
+                username, matches[0], candidate_map[matches[0]],
+            )
+            return candidate_map[matches[0]]
+
         return None
 
     # ------------------------------------------------------------------
@@ -528,10 +674,17 @@ class StateManager:
 # ---------------------------------------------------------------------------
 
 def _name_variants(username: str) -> list[str]:
-    variants = {username.lower()}
+    """Generate lowercase lookup variants for a username.
+
+    Includes all parts produced by splitting on common separators so that
+    e.g. 'Swastik Goomber' → ['swastik goomber', 'swastik', 'goomber'].
+    """
+    variants: set[str] = {username.lower()}
     for sep in (" ", ".", "_", "-"):
         if sep in username:
-            variants.add(username.split(sep)[0].lower())
+            for part in username.split(sep):
+                if part:
+                    variants.add(part.lower())
     return list(variants)
 
 

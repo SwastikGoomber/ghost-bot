@@ -43,6 +43,11 @@ def setup_logging(log_dir: str = "logs", level: int = logging.INFO) -> None:
     logging.getLogger("motor").setLevel(logging.WARNING)
     logging.getLogger("google").setLevel(logging.WARNING)
 
+    # Enable DEBUG for pipeline and LLM layers so Ollama calls are visible
+    logging.getLogger("bot.pipeline").setLevel(logging.DEBUG)
+    logging.getLogger("bot.utils.llm").setLevel(logging.DEBUG)
+    logging.getLogger("bot.memory.rag").setLevel(logging.DEBUG)
+
 
 def get_logger(name: str) -> logging.Logger:
     """Return a named logger. Call with __name__ from any module."""

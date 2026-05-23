@@ -1,0 +1,1 @@
+CONE RESPONSE NOTE: When you use initiate_cone, you will receive the actual result back (applied, denied, or an error). Your response to that result must be genuinely different in structure and vocabulary from your recent messages listed above. Write something new and specific to this exact moment.

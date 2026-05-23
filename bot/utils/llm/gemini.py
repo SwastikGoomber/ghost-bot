@@ -2,8 +2,9 @@
 Gemini LLM client.
 
 Wraps google-genai's async API. Handles chat, vision, and summary generation.
-No tool declarations are registered here — cone operations are handled
-entirely by the pipeline after the router phase (Phase 3).
+Cone tool declarations live here; the pipeline intercepts the function_call
+and feeds a function_response back via send_tool_result() to get Ghost's
+reactive reply based on what actually happened.
 """
 
 from __future__ import annotations
@@ -11,15 +12,31 @@ from __future__ import annotations
 import aiohttp
 import base64
 import logging
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 from google import genai
 from google.genai import types
 
 from .base import LLMClient
 from ..exceptions import LLMError, LLMRateLimitError
+from ..models import ConeOutcome, ConeToolCall
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ConeCallContext:
+    """
+    Bundles a parsed ConeToolCall with the raw Gemini Content from the
+    generate_with_tools() call.
+
+    The raw_model_content (types.Content) is needed to reconstruct the
+    multi-turn conversation for send_tool_result() — Gemini requires the
+    original function_call part to appear before the function_response.
+    """
+    call: ConeToolCall
+    raw_model_content: Any  # types.Content containing the function_call Part
 
 
 class GeminiClient(LLMClient):
@@ -70,6 +87,217 @@ class GeminiClient(LLMClient):
         """
         try:
             contents = self._build_contents(messages)
+            config = types.GenerateContentConfig(
+                temperature=self._gen_config.temperature,
+                top_p=self._gen_config.top_p,
+                max_output_tokens=self._gen_config.max_output_tokens,
+                system_instruction=system_prompt if system_prompt else None,
+            )
+            response = await self._client.aio.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=config,
+            )
+            return self._extract_text(response)
+        except Exception as exc:
+            self._handle_exception(exc)
+
+    # ------------------------------------------------------------------
+    # Tool-calling generate — with initiate_cone tool available
+    # ------------------------------------------------------------------
+
+    async def generate_with_tools(
+        self,
+        messages: list[dict],
+        system_prompt: str = "",
+    ) -> tuple[Optional[ConeCallContext], str]:
+        """
+        Generate a response with the initiate_cone tool available.
+
+        Gemini generates plain text for the vast majority of messages.
+        If it decides to cone someone, it outputs a function_call instead.
+        The caller must follow up with send_tool_result() after running the
+        cone pipeline, so Ghost can react to the actual outcome.
+
+        Args:
+            messages:      Conversation history.
+            system_prompt: System context (includes Ghost's persona + any RAG chunks).
+
+        Returns:
+            (ConeCallContext, "")      if Gemini called initiate_cone.
+            (None, "response text")   if Gemini generated a plain text reply.
+
+        Raises:
+            LLMRateLimitError: on 429 / RESOURCE_EXHAUSTED.
+            LLMError:          on any other API failure.
+        """
+        try:
+            contents = self._build_contents(messages)
+
+            # Define the initiate_cone tool schema
+            initiate_cone_tool = types.Tool(
+                function_declarations=[
+                    types.FunctionDeclaration(
+                        name="initiate_cone",
+                        description=(
+                            "Apply a text transformation (cone) to a Discord user's messages. "
+                            "Use this tool SPARINGLY — only when someone explicitly asks, "
+                            "or when the conversation genuinely calls for it as a character moment. "
+                            "Ghost will respond after learning whether the cone was applied or denied. "
+                            "IMPORTANT: Prefer temporary cones — always set a duration or condition "
+                            "unless the person explicitly asks for a permanent cone. "
+                            "Use your judgement: a silly request warrants a few minutes or an hour, "
+                            "a bigger offence might earn an hour or few hours. Permanent should be rare."
+                        ),
+                        parameters=types.Schema(
+                            type=types.Type.OBJECT,
+                            required=[
+                                "cone_target",
+                                "cone_effect",
+                                "cone_trigger",
+                            ],
+                            properties={
+                                "cone_target": types.Schema(
+                                    type=types.Type.STRING,
+                                    description="Canonical Discord username of the person to cone.",
+                                ),
+                                "cone_effect": types.Schema(
+                                    type=types.Type.STRING,
+                                    description=(
+                                        "Cone effect to apply. Must be one of: "
+                                        "uwu, pirate, shakespeare, caveman, drunk, slayspeak, "
+                                        "brainrot, scrum, linkedin, crisis, canadian, vsauce, "
+                                        "bri, oni, dyslexia, bardify, valley, genz, corporate, "
+                                        "emoji, existential, polite, conspiracy, british, "
+                                        "censor, dickslexia, unga, drunkard."
+                                    ),
+                                ),
+                                "cone_trigger": types.Schema(
+                                    type=types.Type.STRING,
+                                    description=(
+                                        "Why the cone is happening. Must be one of: "
+                                        "'requested_approved' (an approved crew member asked), "
+                                        "'requested_unapproved' (a regular user asked), "
+                                        "'autonomous' (your own spontaneous decision)."
+                                    ),
+                                ),
+                                "cone_duration": types.Schema(
+                                    type=types.Type.STRING,
+                                    description=(
+                                        "How long the cone lasts. Use your own judgement — "
+                                        "prefer a temporary duration (e.g. '5 minutes', '30 minutes', '2 hours', '6 hours', etc) "
+                                        "unless the person explicitly asked to make it permanent. "
+                                        "A minor silly request = a few minutes. "
+                                        "A bigger offence or persistent annoyance = up to a few hours. "
+                                        "Only omit this (making it permanent) if someone explicitly asked for that."
+                                    ),
+                                ),
+                                "cone_condition": types.Schema(
+                                    type=types.Type.STRING,
+                                    description=(
+                                        "Condition for early removal (can be used instead of or alongside duration). "
+                                        "e.g. 'until they say sorry', 'until they admit Ghost is always right'. "
+                                        "Good for playful in-character moments — use this when it fits the vibe."
+                                    ),
+                                ),
+                            },
+                        ),
+                    )
+                ]
+            )
+
+            config = types.GenerateContentConfig(
+                temperature=self._gen_config.temperature,
+                top_p=self._gen_config.top_p,
+                max_output_tokens=self._gen_config.max_output_tokens,
+                system_instruction=system_prompt if system_prompt else None,
+                tools=[initiate_cone_tool],
+            )
+
+            response = await self._client.aio.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=config,
+            )
+
+            # Log response structure for diagnostics
+            try:
+                finish_reason = response.candidates[0].finish_reason if response.candidates else "NO_CANDIDATES"
+                num_parts = len(response.candidates[0].content.parts) if response.candidates else 0
+                part_types = [
+                    "function_call" if hasattr(p, "function_call") and p.function_call else "text"
+                    for p in (response.candidates[0].content.parts if response.candidates else [])
+                ]
+                logger.debug(
+                    "[generate_with_tools] finish_reason=%s parts=%d types=%s",
+                    finish_reason, num_parts, part_types,
+                )
+            except Exception as diag_exc:
+                logger.debug("[generate_with_tools] Could not read response structure: %s", diag_exc)
+
+            # Check if the model called the tool
+            cone_ctx = self._extract_cone_call_context(response)
+            if cone_ctx is not None:
+                return cone_ctx, ""
+
+            # Plain text response
+            return None, self._extract_text(response)
+
+        except Exception as exc:
+            self._handle_exception(exc)
+
+    # ------------------------------------------------------------------
+    # Tool result follow-up — feed outcome back to Ghost
+    # ------------------------------------------------------------------
+
+    async def send_tool_result(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        raw_model_content: Any,
+        outcome: ConeOutcome,
+    ) -> str:
+        """
+        Send the cone pipeline outcome back to Gemini as a function_response
+        and return Ghost's fresh, reactive reply.
+
+        Gemini sees its own function_call turn, followed by the function_response
+        describing what actually happened (applied, denied, error, etc.), and
+        generates a contextually appropriate response in Ghost's voice.
+
+        Args:
+            messages:           The same conversation history passed to generate_with_tools.
+            system_prompt:      The same system prompt (persona + RAG + anti-repetition).
+            raw_model_content:  The types.Content from generate_with_tools containing
+                                the original function_call Part.
+            outcome:            Typed result of the full cone pipeline.
+
+        Returns:
+            Ghost's text response.
+
+        Raises:
+            LLMRateLimitError: on 429 / RESOURCE_EXHAUSTED.
+            LLMError:          on any other API failure.
+        """
+        try:
+            contents = self._build_contents(messages)
+
+            # Append Ghost's turn containing the function_call Part
+            contents.append(raw_model_content)
+
+            # Append the function_response as a user turn
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_function_response(
+                            name="initiate_cone",
+                            response=outcome.model_dump(exclude_none=True),
+                        )
+                    ],
+                )
+            )
+
             config = types.GenerateContentConfig(
                 temperature=self._gen_config.temperature,
                 top_p=self._gen_config.top_p,
@@ -216,6 +444,35 @@ class GeminiClient(LLMClient):
             return "".join(p.text for p in parts if hasattr(p, "text") and p.text)
         except (AttributeError, IndexError):
             raise LLMError("Gemini returned an empty or unparseable response.")
+
+    def _extract_cone_call_context(self, response) -> Optional[ConeCallContext]:
+        """
+        Check if the Gemini response contains an initiate_cone function call.
+
+        Returns ConeCallContext (parsed call + raw Content for replay) if the
+        tool was called, None for plain text responses.
+        """
+        try:
+            candidate = response.candidates[0]
+            raw_content = candidate.content  # preserve for send_tool_result replay
+            parts = raw_content.parts
+            for part in parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    fc = part.function_call
+                    logger.debug("[_extract_cone_call_context] Found function_call: name=%s", fc.name)
+                    if fc.name == "initiate_cone":
+                        args: dict[str, Any] = dict(fc.args)
+                        call = ConeToolCall(
+                            cone_target=str(args.get("cone_target", "")),
+                            cone_effect=str(args.get("cone_effect", "uwu")),
+                            cone_trigger=str(args.get("cone_trigger", "autonomous")),
+                            cone_duration=args.get("cone_duration") or None,
+                            cone_condition=args.get("cone_condition") or None,
+                        )
+                        return ConeCallContext(call=call, raw_model_content=raw_content)
+        except (AttributeError, IndexError, KeyError) as exc:
+            logger.debug("[_extract_cone_call_context] Failed to extract tool call: %s", exc)
+        return None
 
     async def _download_image(self, url: str) -> tuple[Optional[bytes], str]:
         """Download an image URL to raw bytes. Returns (bytes, mime_type) or (None, '')."""

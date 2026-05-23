@@ -311,113 +311,94 @@ async def store_suggested_tags(
 
 async def vector_search(
     query_embedding: list[float],
-    doc_types: list[str],
-    tags_must_include: list[str],
-    individuals_must_include: list[str],
-    min_significance: int,
+    atlas_filter: dict,
+    post_filter: dict,
     num_candidates: int = 100,
     limit: int = 20,
 ) -> list[dict]:
     """
-    Run Atlas Vector Search with metadata pre-filtering.
+    Run Atlas Vector Search with metadata pre-filtering and post-filtering.
 
     Returns raw MongoDB documents (dicts) sorted by vector similarity.
     The caller (retriever) applies significance weighting and final top-K cutoff.
 
     Args:
-        query_embedding:          Vector embedding of the retrieval query text.
-        doc_types:                If non-empty, restrict to these doc_types.
-        tags_must_include:        If non-empty, all of these tags must be present.
-        individuals_must_include: If non-empty, all of these individuals must be present.
-        min_significance:         Minimum significance score.
-        num_candidates:           Candidates considered by vector search before filtering.
-        limit:                    Maximum documents returned by vector search.
+        query_embedding:  Vector embedding of the retrieval query text.
+        atlas_filter:     Pre-filter dict for $vectorSearch (only Atlas-indexed fields).
+                          Pass an empty dict {} to skip pre-filtering.
+        post_filter:      Post-filter dict applied as $match after $vectorSearch
+                          (for fields like status, significance not in the Atlas index).
+        num_candidates:   Candidates considered by vector search before filtering.
+        limit:            Maximum documents returned by vector search.
 
     Returns:
         List of raw document dicts, each with a `vector_score` field added.
     """
     db = get_db()
 
-    # Build the metadata filter — always exclude non-active and summarized chunks
-    # (is_summarized chunks exist but are deprioritised; the arc_summary covers them)
-    mongo_filter: dict = {
-        "status": ChunkStatus.ACTIVE.value,
-        "significance": {"$gte": min_significance},
+    vector_search_stage: dict = {
+        "index": "rag_vector_index",
+        "path": "embedding",
+        "queryVector": query_embedding,
+        "numCandidates": num_candidates,
+        "limit": limit,
     }
+    # Only set filter if there are actual conditions — empty dict causes Atlas error
+    if atlas_filter:
+        vector_search_stage["filter"] = atlas_filter
 
-    if doc_types:
-        # Prefer arc_summary chunks — if searching by doc_type and arc_summary isn't listed,
-        # add it so the arc-level summary is always eligible alongside individual chunks.
-        # The retriever handles deduplication to avoid surfacing both.
-        search_types = list(doc_types)
-        if DocType.ARC_SUMMARY.value not in search_types:
-            search_types.append(DocType.ARC_SUMMARY.value)
-        mongo_filter["doc_type"] = {"$in": search_types}
-
-    if tags_must_include:
-        mongo_filter["tags"] = {"$all": tags_must_include}
-
-    if individuals_must_include:
-        mongo_filter["individuals"] = {"$all": individuals_must_include}
-
-    pipeline = [
-        {
-            "$vectorSearch": {
-                "index": "rag_vector_index",
-                "path": "embedding",
-                "queryVector": query_embedding,
-                "numCandidates": num_candidates,
-                "limit": limit,
-                "filter": mongo_filter,
-            }
-        },
-        {
-            "$addFields": {
-                "vector_score": {"$meta": "vectorSearchScore"},
-            }
-        },
+    # Run vector search first, then apply post-filter
+    pre_pipeline = [
+        {"$vectorSearch": vector_search_stage},
+        {"$addFields": {"vector_score": {"$meta": "vectorSearchScore"}}},
     ]
 
-    results = []
-    async for doc in db[COLLECTION].aggregate(pipeline):
-        results.append(doc)
+    pre_results = []
+    async for doc in db[COLLECTION].aggregate(pre_pipeline):
+        pre_results.append(doc)
+
+    logger.debug(
+        "[vector_search] %d docs from $vectorSearch (before post-filter)",
+        len(pre_results),
+    )
+
+    if not pre_results:
+        return []
+
+    # Apply post-filter in Python (avoids a second aggregation round-trip)
+    if post_filter:
+        # Build a filtered pipeline on the already-fetched docs using $match
+        post_pipeline = [
+            {"$vectorSearch": vector_search_stage},
+            {"$addFields": {"vector_score": {"$meta": "vectorSearchScore"}}},
+            {"$match": post_filter},
+        ]
+        results = []
+        async for doc in db[COLLECTION].aggregate(post_pipeline):
+            results.append(doc)
+        logger.debug(
+            "[vector_search] %d docs after post-filter $match",
+            len(results),
+        )
+    else:
+        results = pre_results
 
     return results
 
 
 async def metadata_only_search(
-    doc_types: list[str],
-    tags_must_include: list[str],
-    individuals_must_include: list[str],
-    min_significance: int,
+    extra_filter: dict,
     limit: int = 30,
 ) -> list[dict]:
     """
-    Metadata-only fallback when embeddings are not available or the query has no text.
+    Metadata-only fallback when embeddings are unavailable.
 
     Returns results sorted by significance descending, then ingested_at descending.
     """
     db = get_db()
 
-    mongo_filter: dict = {
-        "status": ChunkStatus.ACTIVE.value,
-        "significance": {"$gte": min_significance},
-    }
-
-    if doc_types:
-        search_types = list(doc_types)
-        if DocType.ARC_SUMMARY.value not in search_types:
-            search_types.append(DocType.ARC_SUMMARY.value)
-        mongo_filter["doc_type"] = {"$in": search_types}
-
-    if tags_must_include:
-        mongo_filter["tags"] = {"$all": tags_must_include}
-
-    if individuals_must_include:
-        mongo_filter["individuals"] = {"$all": individuals_must_include}
-
     cursor = db[COLLECTION].find(
-        mongo_filter,
+        extra_filter,
         sort=[("significance", -1), ("ingested_at", -1)],
         limit=limit,
     )
@@ -426,3 +407,87 @@ async def metadata_only_search(
         doc["vector_score"] = 0.0  # No vector score in fallback path
         results.append(doc)
     return results
+
+
+# ---------------------------------------------------------------------------
+# Taxonomy snapshot — for RAG Query Planner
+# ---------------------------------------------------------------------------
+
+async def get_taxonomy_snapshot() -> "TaxonomySnapshot":
+    """
+    Build a live snapshot of the taxonomy currently in the vector database.
+
+    Aggregates distinct values across all active chunks so the RAG Query Planner
+    can reference real tag names, individual names, etc. in its prompt.
+
+    Returns an empty TaxonomySnapshot if the database is unavailable or empty.
+    """
+    from bot.utils.models import TaxonomySnapshot  # local import to avoid circular
+
+    db = get_db()
+    coll = db[COLLECTION]
+    active_filter = {"status": ChunkStatus.ACTIVE.value}
+
+    try:
+        # Aggregate all arc tags with their chunk counts
+        arc_tags: dict[str, int] = {}
+        async for doc in coll.aggregate([
+            {"$match": {**active_filter, "tags": {"$exists": True, "$ne": []}}},
+            {"$unwind": "$tags"},
+            {"$match": {"tags": {"$regex": "^arc:"}}},
+            {"$group": {"_id": "$tags", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+        ]):
+            arc_tags[doc["_id"]] = doc["count"]
+
+        # Doc type counts
+        doc_type_counts: dict[str, int] = {}
+        async for doc in coll.aggregate([
+            {"$match": active_filter},
+            {"$group": {"_id": "$doc_type", "count": {"$sum": 1}}},
+        ]):
+            if doc["_id"]:
+                doc_type_counts[doc["_id"]] = doc["count"]
+
+        # Distinct individuals (flatten array field)
+        known_individuals: list[str] = []
+        async for doc in coll.aggregate([
+            {"$match": {**active_filter, "individuals": {"$exists": True, "$ne": []}}},
+            {"$unwind": "$individuals"},
+            {"$group": {"_id": "$individuals"}},
+            {"$sort": {"_id": 1}},
+        ]):
+            known_individuals.append(doc["_id"])
+
+        # Distinct locations
+        known_locations: list[str] = []
+        async for doc in coll.aggregate([
+            {"$match": {**active_filter, "locations": {"$exists": True, "$ne": []}}},
+            {"$unwind": "$locations"},
+            {"$group": {"_id": "$locations"}},
+            {"$sort": {"_id": 1}},
+        ]):
+            known_locations.append(doc["_id"])
+
+        # Distinct topics (non-arc tags)
+        known_topics: list[str] = []
+        async for doc in coll.aggregate([
+            {"$match": {**active_filter, "tags": {"$exists": True, "$ne": []}}},
+            {"$unwind": "$tags"},
+            {"$match": {"tags": {"$not": {"$regex": "^arc:"}}}},
+            {"$group": {"_id": "$tags"}},
+            {"$sort": {"_id": 1}},
+        ]):
+            known_topics.append(doc["_id"])
+
+        return TaxonomySnapshot(
+            arc_tags=arc_tags,
+            doc_type_counts=doc_type_counts,
+            known_individuals=known_individuals,
+            known_locations=known_locations,
+            known_topics=known_topics,
+        )
+
+    except Exception as exc:
+        logger.warning("get_taxonomy_snapshot failed (%s) — returning empty snapshot.", exc)
+        return TaxonomySnapshot()
