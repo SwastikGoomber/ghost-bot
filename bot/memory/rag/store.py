@@ -13,7 +13,7 @@ Index setup:
     The vector search index must be created manually in Atlas:
         - Index name: rag_vector_index
         - Field: embedding
-        - Dimensions: 1024  (nomic-embed-large)
+        - Dimensions: 768  (nomic-embed-text)
         - Similarity: cosine
 
 Atlas Vector Search on M0 free tier:

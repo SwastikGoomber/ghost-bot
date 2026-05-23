@@ -5,7 +5,7 @@ models:
   router: "gemma4:e4b"             # Phase 5 - Gemma 4 local router via Ollama
   cone_approval: "gemma4:e4b"      # Phase 5 - Gemma 4 local cone approval agent via Ollama
   rag_planner: "gemma4:e4b"        # Phase 5 - Gemma 4 local RAG query planner via Ollama
-  embedder: "mxbai-embed-large"    # Phase 4 - local embeddings via Ollama (1024 dimensions)
+  embedder: "nomic-embed-text"    # Phase 4 - local embeddings via Ollama (768 dimensions)
   extractor: "gemini-2.5-flash"    # Phase 4 - RAG extraction (batch mode, needs quality + long output)
   arc_summarizer: "gemini-2.5-flash" # Phase 4 - arc summary generation
 
@@ -56,6 +56,7 @@ cone:
     - "river333"
     - "dulcibel"
     - "yostiiii"
+    - "sileistar"
   # Programmatic gate thresholds (Tier 0)
   per_target_cooldown_minutes: 20   # Min time between cones on the same target
   hourly_limit: 10                  # Max total cones applied in any rolling 60-min window

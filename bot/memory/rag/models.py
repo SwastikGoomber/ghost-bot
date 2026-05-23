@@ -63,7 +63,7 @@ class RAGDocument(BaseModel):
     doc_type: DocType
     suggested_doc_type: Optional[str] = None        # Only set when doc_type == "others"
 
-    summary: str                                    # 2-4 sentence LLM-generated abstract
+    summary: str                                    # LLM-generated summary (length varies dynamically by doc_type/arc size)
     key_quotes: list[str] = Field(default_factory=list)  # 0-3 verbatim quotes
 
     # Tag layers

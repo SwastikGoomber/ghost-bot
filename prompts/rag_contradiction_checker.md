@@ -14,7 +14,7 @@ A contradiction exists when:
 A contradiction does NOT exist when:
 - The facts are about the same person but different aspects (one about their room, one about their job)
 - The new fact is a development or update that doesn't negate the old one
-- The new fact adds specificity without contradicting the old ("Ghost is a dragon" → "Ghost is a teenage black dragon" — not a contradiction)
+- The new fact adds specificity without contradicting the old ("Ghost is a dragon" → "Ghost is a baby black dragon" — not a contradiction)
 - The facts are simply both true at different points in time and neither explicitly overrides the other
 
 ---
