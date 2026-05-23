@@ -198,14 +198,14 @@ class OllamaClient(LLMClient):
         Generate a vector embedding for the given text.
 
         Uses Ollama's /api/embed endpoint with the model configured for this client.
-        For the RAG pipeline, this client is initialised with model="nomic-embed-large".
-        Returns 1024-dimensional vectors.
+        For the RAG pipeline, this client is initialised with model="nomic-embed-text".
+        Returns 768-dimensional vectors.
 
         Args:
             text: The text to embed (typically: summary + space-joined free_labels).
 
         Returns:
-            A flat list of floats (1024 dimensions for nomic-embed-large).
+            A flat list of floats (768 dimensions for nomic-embed-text).
 
         Raises:
             LLMError: if Ollama is unreachable or returns an error.
@@ -236,8 +236,8 @@ class OllamaClient(LLMClient):
         except aiohttp.ClientConnectorError as exc:
             raise LLMError(
                 f"Cannot reach Ollama at {self.base_url}. "
-                "Is Ollama running with nomic-embed-large pulled? "
-                "(ollama serve && ollama pull nomic-embed-large)"
+                "Is Ollama running with nomic-embed-text pulled? "
+                "(ollama serve && ollama pull nomic-embed-text)"
             ) from exc
         except (KeyError, TypeError) as exc:
             raise LLMError(f"Unexpected response shape from Ollama embed: {exc}") from exc

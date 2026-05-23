@@ -43,9 +43,12 @@ def _get_cached_client(role: str) -> LLMClient:
     cfg = get_config()
 
     if role in ("chat", "vision", "summary", "extractor", "arc_summarizer"):
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        api_key_free = os.environ.get("GEMINI_API_KEY")
+        if not api_key_free:
             raise ConfigError("GEMINI_API_KEY environment variable is not set.")
+
+        api_key_paid = os.environ.get("GEMINI_API_KEY_PAID") or None
+        preferred_source = cfg.models.api_keys.get(role, "free")
 
         if role == "chat":
             gen = cfg.gemini.chat
@@ -64,7 +67,10 @@ def _get_cached_client(role: str) -> LLMClient:
             model = cfg.models.arc_summarizer
 
         return GeminiClient(
-            api_key=api_key,
+            api_key_free=api_key_free,
+            api_key_paid=api_key_paid,
+            preferred_source=preferred_source,
+            role=role,
             model=model,
             temperature=gen.temperature,
             top_p=gen.top_p,

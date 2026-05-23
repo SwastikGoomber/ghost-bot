@@ -14,7 +14,7 @@ What this module does:
 Arc summaries are first-class RAGDocument chunks — retrieved the same way as any other chunk.
 They represent the "chapter summary" level on top of the raw "paragraph" level.
 
-Embeddings are 1024-dimensional vectors from nomic-embed-large.
+Embeddings are 768-dimensional vectors from nomic-embed-text.
 """
 
 from __future__ import annotations

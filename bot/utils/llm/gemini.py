@@ -13,7 +13,9 @@ import aiohttp
 import base64
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from google import genai
 from google.genai import types
@@ -25,6 +27,105 @@ from ..models import ConeOutcome, ConeToolCall
 logger = logging.getLogger(__name__)
 
 
+def get_la_today() -> str:
+    """Get today's date formatted as YYYY-MM-DD in America/Los_Angeles timezone."""
+    tz = ZoneInfo("America/Los_Angeles")
+    now_la = datetime.now(tz)
+    return now_la.strftime("%Y-%m-%d")
+
+
+def get_next_pacific_midnight() -> datetime:
+    """Get the next Pacific Midnight time converted to an offset-aware UTC datetime."""
+    tz = ZoneInfo("America/Los_Angeles")
+    now_la = datetime.now(tz)
+    tomorrow_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return tomorrow_la.astimezone(timezone.utc)
+
+
+class GeminiUsageTracker:
+    """
+    Crash-safe daily Gemini usage tracker and exhaustion state store using
+    a generic MongoDB collection 'system_status'.
+    """
+
+    def __init__(self) -> None:
+        # Import get_db dynamically to avoid circular import issues
+        from bot.memory.db import get_db
+        self._get_db = get_db
+
+    def _get_coll(self) -> Any:
+        return self._get_db().system_status
+
+    async def get_daily_usage(self) -> tuple[int, int]:
+        """
+        Returns (chat_paid_calls, total_paid_calls) for today (America/Los_Angeles date).
+        """
+        try:
+            coll = self._get_coll()
+            today_str = get_la_today()
+            doc = await coll.find_one({"_id": f"gemini_usage_{today_str}"})
+            if not doc:
+                return 0, 0
+            return doc.get("chat_paid_calls", 0), doc.get("total_paid_calls", 0)
+        except Exception as exc:
+            logger.error("Failed to get daily gemini usage from mongo: %s", exc)
+            return 0, 0
+
+    async def increment_paid_calls(self, is_chat: bool) -> None:
+        """
+        Increment the paid chat and/or total calls for today.
+        """
+        try:
+            coll = self._get_coll()
+            today_str = get_la_today()
+            inc_data: dict[str, int] = {"total_paid_calls": 1}
+            if is_chat:
+                inc_data["chat_paid_calls"] = 1
+            
+            # Upsert the daily document
+            await coll.update_one(
+                {"_id": f"gemini_usage_{today_str}"},
+                {"$inc": inc_data},
+                upsert=True
+            )
+        except Exception as exc:
+            logger.error("Failed to increment paid calls in mongo: %s", exc)
+
+    async def get_free_exhausted_until(self) -> Optional[datetime]:
+        """
+        Returns the UTC datetime until which the free API is considered exhausted.
+        """
+        try:
+            coll = self._get_coll()
+            doc = await coll.find_one({"_id": "gemini_status_global"})
+            if not doc:
+                return None
+            val = doc.get("free_exhausted_until")
+            if val:
+                # Ensure it's offset-aware UTC datetime
+                if val.tzinfo is None:
+                    val = val.replace(tzinfo=timezone.utc)
+                return val
+            return None
+        except Exception as exc:
+            logger.error("Failed to get free exhausted until from mongo: %s", exc)
+            return None
+
+    async def set_free_exhausted_until(self, until: Optional[datetime]) -> None:
+        """
+        Sets the global free-tier daily exhaustion timestamp.
+        """
+        try:
+            coll = self._get_coll()
+            await coll.update_one(
+                {"_id": "gemini_status_global"},
+                {"$set": {"free_exhausted_until": until}},
+                upsert=True
+            )
+        except Exception as exc:
+            logger.error("Failed to set free exhausted until in mongo: %s", exc)
+
+
 @dataclass
 class ConeCallContext:
     """
@@ -33,7 +134,7 @@ class ConeCallContext:
 
     The raw_model_content (types.Content) is needed to reconstruct the
     multi-turn conversation for send_tool_result() — Gemini requires the
-    original function_call part to appear before the function_response.
+    original function_call part to appear before the function_call.
     """
     call: ConeToolCall
     raw_model_content: Any  # types.Content containing the function_call Part
@@ -41,26 +142,136 @@ class ConeCallContext:
 
 class GeminiClient(LLMClient):
     """
-    Async Gemini client configured for a single role (chat, vision, or summary).
+    Async Gemini client configured for a single role (chat, vision, or summary)
+    with multi-key dynamic routing, budget caps, and daily Pacific Midnight resets.
 
     Instantiated via get_llm_client(role) — do not construct directly in feature modules.
     """
 
     def __init__(
         self,
-        api_key: str,
+        api_key_free: str,
+        api_key_paid: Optional[str],
+        preferred_source: str,
+        role: str,
         model: str,
         temperature: float = 0.9,
         top_p: float = 0.9,
         max_output_tokens: int = 1000,
     ) -> None:
-        self._client = genai.Client(api_key=api_key)
+        self.api_key_free = api_key_free
+        self.api_key_paid = api_key_paid
+        self.preferred_source = preferred_source
+        self.role = role
         self.model = model
         self._gen_config = types.GenerateContentConfig(
             temperature=temperature,
             top_p=top_p,
             max_output_tokens=max_output_tokens,
         )
+        self._client_free = genai.Client(api_key=api_key_free)
+        self._client_paid = genai.Client(api_key=api_key_paid) if api_key_paid else None
+        self._tracker = GeminiUsageTracker()
+
+    @property
+    def _is_chat(self) -> bool:
+        return self.role in ("chat", "vision")
+
+    async def _check_limits_and_select_client(self, force_paid: bool = False) -> tuple[genai.Client, bool]:
+        """
+        Determines whether to use the free or paid client.
+        Enforces daily budget limits if using the paid client.
+
+        Returns:
+            (client, is_paid)
+        """
+        from bot.utils import get_config
+        cfg = get_config()
+        paid_limits = cfg.gemini.paid_limits
+
+        use_paid = False
+
+        # 1. Determine if we want/need to use paid client
+        if self.preferred_source == "paid" or force_paid:
+            use_paid = True
+        else:
+            # Check if free client is currently marked as exhausted
+            exhausted_until = await self._tracker.get_free_exhausted_until()
+            if exhausted_until:
+                now_utc = datetime.now(timezone.utc)
+                if now_utc < exhausted_until:
+                    logger.info("Free Gemini API is marked exhausted until %s (UTC). Falling back to Paid API.", exhausted_until)
+                    use_paid = True
+                else:
+                    # Time has passed, reset exhaustion status
+                    logger.info("Free Gemini API exhaustion window has expired. Resetting status.")
+                    await self._tracker.set_free_exhausted_until(None)
+
+        # 2. If free client is selected, return it
+        if not use_paid:
+            return self._client_free, False
+
+        # 3. If paid client is selected, verify it exists and enforce limits
+        if not self._client_paid:
+            # No paid key configured. Try falling back to free if we are not forcing paid
+            if not force_paid:
+                logger.warning("Paid Gemini API is selected/fallback active, but GEMINI_API_KEY_PAID is not set. Using free client.")
+                return self._client_free, False
+            raise LLMError("GEMINI_API_KEY_PAID environment variable is not set, but paid client is required.")
+
+        # Enforce budget limits
+        chat_paid, total_paid = await self._tracker.get_daily_usage()
+
+        # Total limit across all roles
+        if total_paid >= paid_limits.max_total_calls_per_day:
+            raise LLMError(f"Daily paid Gemini budget cap reached: {total_paid}/{paid_limits.max_total_calls_per_day} calls.")
+
+        # Chat limit on fallback usage
+        if self._is_chat and chat_paid >= paid_limits.max_chat_calls_per_day:
+            raise LLMError(f"Daily paid Gemini chat budget cap reached: {chat_paid}/{paid_limits.max_chat_calls_per_day} calls.")
+
+        return self._client_paid, True
+
+    async def _execute_with_retry(self, api_func: Any) -> Any:
+        """
+        Executes a Gemini API call using the correct client, handling in-flight daily fallback
+        retries if the free client is rate limited.
+        """
+        client, is_paid = await self._check_limits_and_select_client()
+
+        try:
+            res = await api_func(client)
+            if is_paid:
+                await self._tracker.increment_paid_calls(is_chat=self._is_chat)
+            return res
+        except Exception as exc:
+            try:
+                self._handle_exception(exc)
+            except LLMRateLimitError as rate_exc:
+                if not is_paid:
+                    logger.warning("Free Gemini API rate limited / exhausted. Flagging exhaustion and retrying on paid client.")
+
+                    # Flag exhaustion in MongoDB until next Pacific Midnight
+                    next_midnight = get_next_pacific_midnight()
+                    await self._tracker.set_free_exhausted_until(next_midnight)
+
+                    try:
+                        paid_client, is_paid_now = await self._check_limits_and_select_client(force_paid=True)
+                    except Exception as limit_exc:
+                        logger.error("Failed to select paid client for fallback retry: %s", limit_exc)
+                        raise rate_exc
+
+                    try:
+                        res = await api_func(paid_client)
+                        await self._tracker.increment_paid_calls(is_chat=self._is_chat)
+                        return res
+                    except Exception as paid_exc:
+                        logger.error("Fallback retry on paid Gemini API failed: %s", paid_exc)
+                        self._handle_exception(paid_exc)
+                else:
+                    raise rate_exc
+            except Exception as other_exc:
+                raise other_exc
 
     # ------------------------------------------------------------------
     # Core generate — text only
@@ -85,22 +296,21 @@ class GeminiClient(LLMClient):
             LLMRateLimitError: on 429 / RESOURCE_EXHAUSTED.
             LLMError:          on any other API failure.
         """
-        try:
-            contents = self._build_contents(messages)
-            config = types.GenerateContentConfig(
-                temperature=self._gen_config.temperature,
-                top_p=self._gen_config.top_p,
-                max_output_tokens=self._gen_config.max_output_tokens,
-                system_instruction=system_prompt if system_prompt else None,
-            )
-            response = await self._client.aio.models.generate_content(
+        contents = self._build_contents(messages)
+        config = types.GenerateContentConfig(
+            temperature=self._gen_config.temperature,
+            top_p=self._gen_config.top_p,
+            max_output_tokens=self._gen_config.max_output_tokens,
+            system_instruction=system_prompt if system_prompt else None,
+        )
+        async def _call(cli: genai.Client):
+            return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=config,
             )
-            return self._extract_text(response)
-        except Exception as exc:
-            self._handle_exception(exc)
+        response = await self._execute_with_retry(_call)
+        return self._extract_text(response)
 
     # ------------------------------------------------------------------
     # Tool-calling generate — with initiate_cone tool available
@@ -131,144 +341,143 @@ class GeminiClient(LLMClient):
             LLMRateLimitError: on 429 / RESOURCE_EXHAUSTED.
             LLMError:          on any other API failure.
         """
-        try:
-            contents = self._build_contents(messages)
+        contents = self._build_contents(messages)
 
-            # Define the initiate_cone tool schema
-            initiate_cone_tool = types.Tool(
-                function_declarations=[
-                    types.FunctionDeclaration(
-                        name="initiate_cone",
-                        description=(
-                            "Apply a text transformation (cone) to a Discord user's messages. "
-                            "Use this tool SPARINGLY — only when someone explicitly asks, "
-                            "or when the conversation genuinely calls for it as a character moment. "
-                            "Ghost will respond after learning whether the cone was applied or denied. "
-                            "IMPORTANT: Prefer temporary cones — always set a duration or condition "
-                            "unless the person explicitly asks for a permanent cone. "
-                            "Use your judgement: a silly request warrants a few minutes or an hour, "
-                            "a bigger offence might earn an hour or few hours. Permanent should be rare."
-                        ),
-                        parameters=types.Schema(
-                            type=types.Type.OBJECT,
-                            required=[
-                                "cone_target",
-                                "cone_effect",
-                                "cone_trigger",
-                            ],
-                            properties={
-                                "cone_target": types.Schema(
-                                    type=types.Type.STRING,
-                                    description="Canonical Discord username of the person to cone.",
+        # Define the initiate_cone tool schema
+        initiate_cone_tool = types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name="initiate_cone",
+                    description=(
+                        "Apply a text transformation (cone) to a Discord user's messages. "
+                        "Use this tool SPARINGLY — only when someone explicitly asks, "
+                        "or when the conversation genuinely calls for it as a character moment. "
+                        "Ghost will respond after learning whether the cone was applied or denied. "
+                        "IMPORTANT: Prefer temporary cones — always set a duration or condition "
+                        "unless the person explicitly asks for a permanent cone. "
+                        "Use your judgement: a silly request warrants a few minutes or an hour, "
+                        "a bigger offence might earn an hour or few hours. Permanent should be rare."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        required=[
+                            "cone_target",
+                            "cone_effect",
+                            "cone_trigger",
+                        ],
+                        properties={
+                            "cone_target": types.Schema(
+                                type=types.Type.STRING,
+                                description="Canonical Discord username of the person to cone.",
+                            ),
+                            "cone_effect": types.Schema(
+                                type=types.Type.STRING,
+                                description=(
+                                    "Cone effect to apply. Must be one of: "
+                                    "uwu, pirate, shakespeare, caveman, drunk, slayspeak, "
+                                    "brainrot, scrum, linkedin, crisis, canadian, vsauce, "
+                                    "bri, oni, dyslexia, bardify, valley, genz, corporate, "
+                                    "emoji, existential, polite, conspiracy, british, "
+                                    "censor, dickslexia, unga, drunkard."
                                 ),
-                                "cone_effect": types.Schema(
-                                    type=types.Type.STRING,
-                                    description=(
-                                        "Cone effect to apply. Must be one of: "
-                                        "uwu, pirate, shakespeare, caveman, drunk, slayspeak, "
-                                        "brainrot, scrum, linkedin, crisis, canadian, vsauce, "
-                                        "bri, oni, dyslexia, bardify, valley, genz, corporate, "
-                                        "emoji, existential, polite, conspiracy, british, "
-                                        "censor, dickslexia, unga, drunkard."
-                                    ),
+                            ),
+                            "cone_trigger": types.Schema(
+                                type=types.Type.STRING,
+                                description=(
+                                    "Why the cone is happening. Must be one of: "
+                                    "'requested_approved' (an authorized user asked), "
+                                    "'requested_unapproved' (a regular user asked), "
+                                    "'autonomous' (your own spontaneous decision)."
                                 ),
-                                "cone_trigger": types.Schema(
-                                    type=types.Type.STRING,
-                                    description=(
-                                        "Why the cone is happening. Must be one of: "
-                                        "'requested_approved' (an authorized user asked), "
-                                        "'requested_unapproved' (a regular user asked), "
-                                        "'autonomous' (your own spontaneous decision)."
-                                    ),
+                            ),
+                            "cone_duration": types.Schema(
+                                type=types.Type.STRING,
+                                description=(
+                                    "How long the cone lasts. Use your own judgement — "
+                                    "prefer a temporary duration (e.g. '5 minutes', '30 minutes', '2 hours', '6 hours', etc) "
+                                    "unless the person explicitly asked to make it permanent. "
+                                    "A minor silly request = a few minutes. "
+                                    "A bigger offence or persistent annoyance = up to a few hours. "
+                                    "Only omit this (making it permanent) if someone explicitly asked for that."
                                 ),
-                                "cone_duration": types.Schema(
-                                    type=types.Type.STRING,
-                                    description=(
-                                        "How long the cone lasts. Use your own judgement — "
-                                        "prefer a temporary duration (e.g. '5 minutes', '30 minutes', '2 hours', '6 hours', etc) "
-                                        "unless the person explicitly asked to make it permanent. "
-                                        "A minor silly request = a few minutes. "
-                                        "A bigger offence or persistent annoyance = up to a few hours. "
-                                        "Only omit this (making it permanent) if someone explicitly asked for that."
-                                    ),
+                            ),
+                            "cone_condition": types.Schema(
+                                type=types.Type.STRING,
+                                description=(
+                                    "Condition for early removal (can be used instead of or alongside duration). "
+                                    "e.g. 'until they say sorry', 'until they admit Ghost is always right'. "
+                                    "Good for playful in-character moments — use this when it fits the vibe."
                                 ),
-                                "cone_condition": types.Schema(
-                                    type=types.Type.STRING,
-                                    description=(
-                                        "Condition for early removal (can be used instead of or alongside duration). "
-                                        "e.g. 'until they say sorry', 'until they admit Ghost is always right'. "
-                                        "Good for playful in-character moments — use this when it fits the vibe."
-                                    ),
-                                ),
-                            },
-                        ),
-                    )
-                ]
-            )
+                            ),
+                        },
+                    ),
+                )
+            ]
+        )
 
-            remove_cone_tool = types.Tool(
-                function_declarations=[
-                    types.FunctionDeclaration(
-                        name="remove_cone",
-                        description=(
-                            "Remove an active text transformation (cone) from a Discord user's messages. "
-                            "Use this tool when a user has been coned and has successfully convinced you to uncone them, "
-                            "apologized, satisfied your removal condition, or if you decide to show mercy. "
-                            "Ghost will respond after learning whether the cone was successfully removed."
-                        ),
-                        parameters=types.Schema(
-                            type=types.Type.OBJECT,
-                            required=["cone_target"],
-                            properties={
-                                "cone_target": types.Schema(
-                                    type=types.Type.STRING,
-                                    description="Canonical Discord username of the person to uncone.",
-                                ),
-                            },
-                        ),
-                    )
-                ]
-            )
+        remove_cone_tool = types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name="remove_cone",
+                    description=(
+                        "Remove an active text transformation (cone) from a Discord user's messages. "
+                        "Use this tool when a user has been coned and has successfully convinced you to uncone them, "
+                        "apologized, satisfied your removal condition, or if you decide to show mercy. "
+                        "Ghost will respond after learning whether the cone was successfully removed."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        required=["cone_target"],
+                        properties={
+                            "cone_target": types.Schema(
+                                type=types.Type.STRING,
+                                description="Canonical Discord username of the person to uncone.",
+                            ),
+                        },
+                    ),
+                )
+            ]
+        )
 
-            config = types.GenerateContentConfig(
-                temperature=self._gen_config.temperature,
-                top_p=self._gen_config.top_p,
-                max_output_tokens=self._gen_config.max_output_tokens,
-                system_instruction=system_prompt if system_prompt else None,
-                tools=[initiate_cone_tool, remove_cone_tool],
-            )
+        config = types.GenerateContentConfig(
+            temperature=self._gen_config.temperature,
+            top_p=self._gen_config.top_p,
+            max_output_tokens=self._gen_config.max_output_tokens,
+            system_instruction=system_prompt if system_prompt else None,
+            tools=[initiate_cone_tool, remove_cone_tool],
+        )
 
-            response = await self._client.aio.models.generate_content(
+        async def _call(cli: genai.Client):
+            return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=config,
             )
 
-            # Log response structure for diagnostics
-            try:
-                finish_reason = response.candidates[0].finish_reason if response.candidates else "NO_CANDIDATES"
-                num_parts = len(response.candidates[0].content.parts) if response.candidates else 0
-                part_types = [
-                    "function_call" if hasattr(p, "function_call") and p.function_call else "text"
-                    for p in (response.candidates[0].content.parts if response.candidates else [])
-                ]
-                logger.debug(
-                    "[generate_with_tools] finish_reason=%s parts=%d types=%s",
-                    finish_reason, num_parts, part_types,
-                )
-            except Exception as diag_exc:
-                logger.debug("[generate_with_tools] Could not read response structure: %s", diag_exc)
+        response = await self._execute_with_retry(_call)
 
-            # Check if the model called the tool
-            cone_ctx = self._extract_cone_call_context(response)
-            if cone_ctx is not None:
-                return cone_ctx, ""
+        # Log response structure for diagnostics
+        try:
+            finish_reason = response.candidates[0].finish_reason if response.candidates else "NO_CANDIDATES"
+            num_parts = len(response.candidates[0].content.parts) if response.candidates else 0
+            part_types = [
+                "function_call" if hasattr(p, "function_call") and p.function_call else "text"
+                for p in (response.candidates[0].content.parts if response.candidates else [])
+            ]
+            logger.debug(
+                "[generate_with_tools] finish_reason=%s parts=%d types=%s",
+                finish_reason, num_parts, part_types,
+            )
+        except Exception as diag_exc:
+            logger.debug("[generate_with_tools] Could not read response structure: %s", diag_exc)
 
-            # Plain text response
-            return None, self._extract_text(response)
+        # Check if the model called the tool
+        cone_ctx = self._extract_cone_call_context(response)
+        if cone_ctx is not None:
+            return cone_ctx, ""
 
-        except Exception as exc:
-            self._handle_exception(exc)
+        # Plain text response
+        return None, self._extract_text(response)
 
     # ------------------------------------------------------------------
     # Tool result follow-up — feed outcome back to Ghost
@@ -303,47 +512,48 @@ class GeminiClient(LLMClient):
             LLMRateLimitError: on 429 / RESOURCE_EXHAUSTED.
             LLMError:          on any other API failure.
         """
-        try:
-            contents = self._build_contents(messages)
+        contents = self._build_contents(messages)
 
-            # Append Ghost's turn containing the function_call Part
-            contents.append(raw_model_content)
+        # Append Ghost's turn containing the function_call Part
+        contents.append(raw_model_content)
 
-            # Resolve function name from raw_model_content
-            func_name = "initiate_cone"
-            if raw_model_content and hasattr(raw_model_content, "parts") and raw_model_content.parts:
-                for part in raw_model_content.parts:
-                    if hasattr(part, "function_call") and part.function_call:
-                        func_name = part.function_call.name
-                        break
+        # Resolve function name from raw_model_content
+        func_name = "initiate_cone"
+        if raw_model_content and hasattr(raw_model_content, "parts") and raw_model_content.parts:
+            for part in raw_model_content.parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    func_name = part.function_call.name
+                    break
 
-            # Append the function_response as a user turn
-            contents.append(
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_function_response(
-                            name=func_name,
-                            response=outcome.model_dump(exclude_none=True),
-                        )
-                    ],
-                )
+        # Append the function_response as a user turn
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_function_response(
+                        name=func_name,
+                        response=outcome.model_dump(exclude_none=True),
+                    )
+                ],
             )
+        )
 
-            config = types.GenerateContentConfig(
-                temperature=self._gen_config.temperature,
-                top_p=self._gen_config.top_p,
-                max_output_tokens=self._gen_config.max_output_tokens,
-                system_instruction=system_prompt if system_prompt else None,
-            )
-            response = await self._client.aio.models.generate_content(
+        config = types.GenerateContentConfig(
+            temperature=self._gen_config.temperature,
+            top_p=self._gen_config.top_p,
+            max_output_tokens=self._gen_config.max_output_tokens,
+            system_instruction=system_prompt if system_prompt else None,
+        )
+
+        async def _call(cli: genai.Client):
+            return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=config,
             )
-            return self._extract_text(response)
-        except Exception as exc:
-            self._handle_exception(exc)
+
+        response = await self._execute_with_retry(_call)
+        return self._extract_text(response)
 
     # ------------------------------------------------------------------
     # JSON generate — structured output mode
@@ -371,23 +581,22 @@ class GeminiClient(LLMClient):
             LLMRateLimitError: on 429 / RESOURCE_EXHAUSTED.
             LLMError:          on any other API failure or empty response.
         """
-        try:
-            contents = self._build_contents(messages)
-            config = types.GenerateContentConfig(
-                temperature=self._gen_config.temperature,
-                top_p=self._gen_config.top_p,
-                max_output_tokens=self._gen_config.max_output_tokens,
-                system_instruction=system_prompt if system_prompt else None,
-                response_mime_type="application/json",
-            )
-            response = await self._client.aio.models.generate_content(
+        contents = self._build_contents(messages)
+        config = types.GenerateContentConfig(
+            temperature=self._gen_config.temperature,
+            top_p=self._gen_config.top_p,
+            max_output_tokens=self._gen_config.max_output_tokens,
+            system_instruction=system_prompt if system_prompt else None,
+            response_mime_type="application/json",
+        )
+        async def _call(cli: genai.Client):
+            return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=config,
             )
-            return self._extract_text(response)
-        except Exception as exc:
-            self._handle_exception(exc)
+        response = await self._execute_with_retry(_call)
+        return self._extract_text(response)
 
     # ------------------------------------------------------------------
     # Vision generate — text + images
@@ -413,40 +622,41 @@ class GeminiClient(LLMClient):
         Returns:
             Response text.
         """
-        try:
-            contents = self._build_contents(messages)
+        contents = self._build_contents(messages)
 
-            # Fetch and attach each image as inline bytes
-            image_parts: list[types.Part] = []
-            for url in image_urls:
-                image_bytes, mime_type = await self._download_image(url)
-                if image_bytes:
-                    image_parts.append(
-                        types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-                    )
-                else:
-                    logger.warning("Failed to download image from %s — skipping", url)
-
-            if image_parts:
-                # Append a new user turn that contains all images
-                contents.append(
-                    types.Content(role="user", parts=image_parts)
+        # Fetch and attach each image as inline bytes
+        image_parts: list[types.Part] = []
+        for url in image_urls:
+            image_bytes, mime_type = await self._download_image(url)
+            if image_bytes:
+                image_parts.append(
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
                 )
+            else:
+                logger.warning("Failed to download image from %s — skipping", url)
 
-            config = types.GenerateContentConfig(
-                temperature=self._gen_config.temperature,
-                top_p=self._gen_config.top_p,
-                max_output_tokens=self._gen_config.max_output_tokens,
-                system_instruction=system_prompt if system_prompt else None,
+        if image_parts:
+            # Append a new user turn that contains all images
+            contents.append(
+                types.Content(role="user", parts=image_parts)
             )
-            response = await self._client.aio.models.generate_content(
+
+        config = types.GenerateContentConfig(
+            temperature=self._gen_config.temperature,
+            top_p=self._gen_config.top_p,
+            max_output_tokens=self._gen_config.max_output_tokens,
+            system_instruction=system_prompt if system_prompt else None,
+        )
+
+        async def _call(cli: genai.Client):
+            return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=config,
             )
-            return self._extract_text(response)
-        except Exception as exc:
-            self._handle_exception(exc)
+
+        response = await self._execute_with_retry(_call)
+        return self._extract_text(response)
 
     # ------------------------------------------------------------------
     # Internals

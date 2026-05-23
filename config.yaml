@@ -9,7 +9,19 @@ models:
   extractor: "gemini-2.5-flash"    # Phase 4 - RAG extraction (batch mode, needs quality + long output)
   arc_summarizer: "gemini-2.5-flash" # Phase 4 - arc summary generation
 
+  # API Key Sources: "free" (uses GEMINI_API_KEY) or "paid" (uses GEMINI_API_KEY_PAID)
+  api_keys:
+    chat: "free"
+    vision: "free"
+    summary: "paid"
+    extractor: "free"
+    arc_summarizer: "free"
+
 gemini:
+  paid_limits:
+    max_chat_calls_per_day: 400
+    max_total_calls_per_day: 500
+
   chat:
     temperature: 0.9
     top_p: 0.7
@@ -21,7 +33,7 @@ gemini:
   summary:
     temperature: 0.3
     top_p: 0.9
-    max_output_tokens: 500
+    max_output_tokens: 2000
   extraction:
     temperature: 0.1   # Low temp for structured JSON output — consistency matters here
     top_p: 0.9

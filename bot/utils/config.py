@@ -37,6 +37,13 @@ class ModelsConfig:
     embedder: str = "nomic-embed-text"
     extractor: str = "gemini-2.5-flash"
     arc_summarizer: str = "gemini-2.5-flash"
+    api_keys: dict[str, str] = field(default_factory=lambda: {
+        "chat": "free",
+        "vision": "free",
+        "summary": "free",
+        "extractor": "free",
+        "arc_summarizer": "free",
+    })
 
 
 @dataclass
@@ -47,9 +54,9 @@ class GeminiGenerationConfig:
 
 
 @dataclass
-class OllamaGenerationConfig:
-    temperature: float = 0.1
-    num_predict: int = 128  # Ollama's equivalent of max_output_tokens
+class GeminiPaidLimitsConfig:
+    max_chat_calls_per_day: int = 400
+    max_total_calls_per_day: int = 500
 
 
 @dataclass
@@ -59,6 +66,13 @@ class GeminiConfig:
     summary: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.3, top_p=0.9, max_output_tokens=500))
     extraction: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.1, top_p=0.9, max_output_tokens=2000))
     arc_summary: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.5, top_p=0.9, max_output_tokens=1500))
+    paid_limits: GeminiPaidLimitsConfig = field(default_factory=GeminiPaidLimitsConfig)
+
+
+@dataclass
+class OllamaGenerationConfig:
+    temperature: float = 0.1
+    num_predict: int = 128  # Ollama's equivalent of max_output_tokens
 
 
 @dataclass
@@ -179,7 +193,26 @@ def _load_config() -> Config:
 
     # --- models ---
     models_raw = raw.get("models", {})
-    models = ModelsConfig(**{k: v for k, v in models_raw.items() if hasattr(ModelsConfig, k)}) if models_raw else ModelsConfig()
+    api_keys_raw = models_raw.get("api_keys", {})
+    api_keys = {
+        "chat": api_keys_raw.get("chat", "free"),
+        "vision": api_keys_raw.get("vision", "free"),
+        "summary": api_keys_raw.get("summary", "free"),
+        "extractor": api_keys_raw.get("extractor", "free"),
+        "arc_summarizer": api_keys_raw.get("arc_summarizer", "free"),
+    }
+    models = ModelsConfig(
+        chat=models_raw.get("chat", "gemini-2.5-flash-lite"),
+        vision=models_raw.get("vision", "gemini-2.0-flash"),
+        summary=models_raw.get("summary", "gemini-2.5-flash-lite"),
+        router=models_raw.get("router", "gemma4:e4b"),
+        cone_approval=models_raw.get("cone_approval", "gemma4:e4b"),
+        rag_planner=models_raw.get("rag_planner", "gemma4:e4b"),
+        embedder=models_raw.get("embedder", "nomic-embed-text"),
+        extractor=models_raw.get("extractor", "gemini-2.5-flash"),
+        arc_summarizer=models_raw.get("arc_summarizer", "gemini-2.5-flash"),
+        api_keys=api_keys,
+    )
 
     # --- gemini ---
     def _gen_cfg(d: dict, default_temp: float = 0.9, default_max: int = 1000) -> GeminiGenerationConfig:
@@ -189,12 +222,18 @@ def _load_config() -> Config:
             max_output_tokens=d.get("max_output_tokens", default_max),
         )
     gemini_raw = raw.get("gemini", {})
+    paid_limits_raw = gemini_raw.get("paid_limits", {})
+    paid_limits = GeminiPaidLimitsConfig(
+        max_chat_calls_per_day=paid_limits_raw.get("max_chat_calls_per_day", 400),
+        max_total_calls_per_day=paid_limits_raw.get("max_total_calls_per_day", 500),
+    )
     gemini = GeminiConfig(
         chat=_gen_cfg(gemini_raw.get("chat", {}), default_temp=0.9, default_max=1000),
         vision=_gen_cfg(gemini_raw.get("vision", {}), default_temp=0.7, default_max=500),
         summary=_gen_cfg(gemini_raw.get("summary", {}), default_temp=0.3, default_max=500),
         extraction=_gen_cfg(gemini_raw.get("extraction", {}), default_temp=0.1, default_max=2000),
         arc_summary=_gen_cfg(gemini_raw.get("arc_summary", {}), default_temp=0.5, default_max=1500),
+        paid_limits=paid_limits,
     )
 
     # --- memory ---
