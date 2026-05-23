@@ -24,19 +24,35 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from ..utils.config import get_config
-from ..utils.exceptions import LLMError
-from ..utils.llm import get_llm_client
-from ..utils.llm.ollama import OllamaClient
-from ..utils.models import ConeApprovalResult, Message, UserState
+from bot.utils.config import get_config
+from bot.utils.exceptions import LLMError
+from bot.utils.llm import get_llm_client
+from bot.utils.llm.ollama import OllamaClient
+from bot.utils.models import ConeApprovalResult, Message, UserState, ConeData
 
 if TYPE_CHECKING:
-    from ..cone.manager import ConeManager
+    from bot.cone.manager import ConeManager
 
 logger = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "cone_approval.md"
 _APPROVAL_PROMPT_TEMPLATE = _PROMPT_PATH.read_text(encoding="utf-8")
+
+_UNCONE_PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "uncone_approval.md"
+_UNCONE_PROMPT_TEMPLATE = _UNCONE_PROMPT_PATH.read_text(encoding="utf-8")
+
+
+def format_elapsed_time(seconds: float) -> str:
+    """Format elapsed time in seconds into a human-readable string."""
+    if seconds < 60:
+        return f"{int(seconds)} seconds"
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        remaining_seconds = int(seconds % 60)
+        return f"{minutes} minutes, {remaining_seconds} seconds"
+    hours = int(minutes // 60)
+    remaining_minutes = int(minutes % 60)
+    return f"{hours} hours, {remaining_minutes} minutes"
 
 # In-process rolling history for the Tier 0 rate limits.
 # {target_username: [datetime_of_cone, ...]}
@@ -346,3 +362,158 @@ async def run_cone_approval(
         requester_state=requester_state,
         is_requester_authorized=is_requester_authorized,
     )
+
+
+# ---------------------------------------------------------------------------
+# Uncone approval pipeline — programmatic + Gemma 4 gate
+# ---------------------------------------------------------------------------
+
+async def run_uncone_approval(
+    cone_target: str,
+    requester_username: str,
+    recent_messages: list[Message],
+    requester_state: Optional[UserState],
+    cone_manager: "ConeManager",
+) -> ConeApprovalResult:
+    """
+    Run the full uncone approval pipeline.
+
+    Args:
+        cone_target:        Username of the person to be unconed.
+        requester_username: Username of whoever sent the message.
+        recent_messages:    Last N messages (for approval agent context).
+        requester_state:    UserState of the requester (for relationship context).
+        cone_manager:       Active ConeManager for active-cone checks.
+    """
+    # Tier 0 programmatic gate
+    target_discord_id = cone_manager.find_discord_id_by_username(cone_target)
+    if not target_discord_id:
+        logger.debug("Uncone Gate: could not resolve '%s' to a discord_id", cone_target)
+        return ConeApprovalResult(
+            approved=False,
+            reason=f"Could not resolve uncone target '{cone_target}' to a Discord ID.",
+        )
+
+    is_active, _ = await cone_manager.is_coned(target_discord_id)
+    if not is_active:
+        logger.debug("Uncone Gate: %s is not currently coned", cone_target)
+        return ConeApprovalResult(
+            approved=False,
+            reason=f"{cone_target} is not currently coned.",
+        )
+
+    active_cone = cone_manager._state.cone_data.get(target_discord_id)
+    if not active_cone or not active_cone.active:
+        logger.debug("Uncone Gate: no active cone record for %s", cone_target)
+        return ConeApprovalResult(
+            approved=False,
+            reason=f"{cone_target} is not currently coned.",
+        )
+
+    # Tier 1 Ollama/Gemma agent evaluation
+    cfg = get_config()
+    is_requester_authorized = requester_username.lower() in cfg.cone.permissions
+
+    return await uncone_approval_agent(
+        cone_target=cone_target,
+        active_cone=active_cone,
+        requester_username=requester_username,
+        is_requester_authorized=is_requester_authorized,
+        recent_messages=recent_messages,
+        requester_state=requester_state,
+    )
+
+
+async def uncone_approval_agent(
+    cone_target: str,
+    active_cone: ConeData,
+    requester_username: str,
+    is_requester_authorized: bool,
+    recent_messages: list[Message],
+    requester_state: Optional[UserState],
+) -> ConeApprovalResult:
+    """
+    Ask Gemma 4 whether this uncone should be approved using the uncone_approval.md template.
+    """
+    import time
+    from bot.utils.llm import get_llm_client
+    from bot.utils.llm.ollama import OllamaClient
+
+    client = get_llm_client("cone_approval")
+    if not isinstance(client, OllamaClient):
+        logger.error("Cone approval client is not an OllamaClient — denying by default.")
+        return ConeApprovalResult(approved=False, reason="Approval client unavailable.")
+
+    # Format recent conversation context
+    ctx_lines = []
+    for msg in recent_messages[-5:]:
+        speaker = "Ghost" if msg.from_bot else msg.username or "User"
+        ctx_lines.append(f"{speaker}: {msg.content}")
+    conversation_context = "\n".join(ctx_lines) if ctx_lines else "(no recent context)"
+
+    # Format relationship summary
+    relationship_summary = "(unknown user — no relationship data)"
+    if requester_state and requester_state.summaries and requester_state.summaries.relationship:
+        relationship_summary = requester_state.summaries.relationship
+
+    # Calculate time elapsed
+    elapsed_seconds = max(0.0, time.time() - active_cone.timestamp)
+    time_elapsed_str = format_elapsed_time(elapsed_seconds)
+
+    # Build prompt
+    prompt = (
+        _UNCONE_PROMPT_TEMPLATE
+        .replace("{cone_target}", cone_target)
+        .replace("{cone_effect}", active_cone.effect)
+        .replace("{applied_by}", active_cone.applied_by)
+        .replace("{original_trigger}", active_cone.reason)
+        .replace("{original_reason}", active_cone.reason)
+        .replace("{time_elapsed}", time_elapsed_str)
+        .replace("{requester_username}", requester_username)
+        .replace("{is_requester_authorized}", "Yes" if is_requester_authorized else "No")
+        .replace("{requester_relationship}", relationship_summary)
+        .replace("{conversation_context}", conversation_context)
+    )
+
+    try:
+        raw = await client.generate_json(
+            messages=[{"role": "user", "content": "Evaluate this uncone request."}],
+            system_prompt=prompt,
+        )
+
+        cleaned_raw = raw.strip()
+        import re
+        json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned_raw, re.DOTALL)
+        if json_match:
+            cleaned_raw = json_match.group(1).strip()
+        elif not cleaned_raw.startswith("{") and "{" in cleaned_raw:
+            start = cleaned_raw.find("{")
+            end = cleaned_raw.rfind("}")
+            if start != -1 and end != -1:
+                cleaned_raw = cleaned_raw[start:end+1]
+
+        if not cleaned_raw:
+            logger.warning("Uncone approval agent received empty response from Ollama — denying by default.")
+            return ConeApprovalResult(approved=False, reason="Empty response from approval agent.")
+
+        data = json.loads(cleaned_raw)
+        result = ConeApprovalResult(
+            approved=bool(data.get("approved", False)),
+            reason=str(data.get("reason", "")),
+        )
+        logger.info(
+            "Uncone approval [target: %s, requester: %s]: approved=%s — %s",
+            cone_target, requester_username, result.approved, result.reason,
+        )
+        return result
+
+    except json.JSONDecodeError as exc:
+        logger.warning("Uncone approval agent JSON parse failed. Raw output: %r. Error: %s", raw, exc)
+        return ConeApprovalResult(approved=False, reason="JSON parse failed.")
+    except LLMError as exc:
+        logger.warning("Uncone approval agent failed (%s) — denying by default.", exc)
+        return ConeApprovalResult(
+            approved=False,
+            reason=f"Approval agent error: {exc}",
+        )
+

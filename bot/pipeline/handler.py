@@ -42,7 +42,7 @@ from ..cone.effects.registry import resolve as resolve_effect
 from .context import ContextBuilder
 from .router import IntentRouter
 from .rag_planner import RAGQueryPlanner
-from .cone_approval import run_cone_approval, record_cone_applied
+from bot.pipeline.cone_approval import run_cone_approval, record_cone_applied, run_uncone_approval
 
 logger = logging.getLogger(__name__)
 
@@ -363,107 +363,180 @@ async def _handle_cone_call(
     cone_call = cone_ctx.call
     requester_username = requester_state.primary_identity.username or ""
 
-    # 1. Validate effect (default to uwu on unknown)
-    try:
-        canonical_effect = resolve_effect(cone_call.cone_effect)
-    except Exception:
-        logger.warning("Unknown cone effect '%s' — defaulting to 'uwu'.", cone_call.cone_effect)
-        canonical_effect = "uwu"
-
-    # 2. Validate trigger
-    valid_triggers = {"requested_approved", "requested_unapproved", "autonomous"}
-    cone_trigger = cone_call.cone_trigger if cone_call.cone_trigger in valid_triggers else "autonomous"
-
-    # Pipeline safeguard: if requester is an authorized user, force/promote trigger to requested_approved
-    cfg = get_config()
-    if requester_username.lower() in cfg.cone.permissions:
-        cone_trigger = "requested_approved"
-
-    # 3. Run two-tier approval
-    approval = await run_cone_approval(
-        cone_target=cone_call.cone_target,
-        cone_trigger=cone_trigger,
-        cone_effect=canonical_effect,
-        requester_username=requester_username,
-        recent_messages=recent_messages,
-        requester_state=requester_state,
-        cone_manager=cone_manager,
-    )
-
-    # 4. Build ConeOutcome based on result
-    if not approval.approved:
-        logger.debug(
-            "Cone denied for %s (%s): %s",
-            cone_call.cone_target, cone_trigger, approval.reason,
+    if cone_call.tool_name == "remove_cone":
+        # 1. Run uncone approval
+        approval = await run_uncone_approval(
+            cone_target=cone_call.cone_target,
+            requester_username=requester_username,
+            recent_messages=recent_messages,
+            requester_state=requester_state,
+            cone_manager=cone_manager,
         )
-        outcome = ConeOutcome(
-            status="denied",
-            target=cone_call.cone_target,
-            effect=canonical_effect,
-            reason=approval.reason,
-        )
-    else:
-        # Resolve target → Discord ID
-        target_discord_id = cone_manager.find_discord_id_by_username(cone_call.cone_target)
-        if not target_discord_id:
-            logger.warning(
-                "Could not resolve cone target '%s' to a Discord ID.",
-                cone_call.cone_target,
+
+        # 2. Build ConeOutcome based on result
+        if not approval.approved:
+            logger.debug(
+                "Uncone denied for %s: %s",
+                cone_call.cone_target, approval.reason,
             )
             outcome = ConeOutcome(
-                status="target_unknown",
+                status="denied",
                 target=cone_call.cone_target,
-                effect=canonical_effect,
-                reason=(
-                    f"Could not find '{cone_call.cone_target}' in Discord. "
-                    "Ask the user to @mention them or use their exact username."
-                ),
+                reason=approval.reason,
             )
         else:
-            # Attempt apply — catch all exceptions
-            try:
-                result = await cone_manager.apply(
-                    discord_id=target_discord_id,
-                    effect=canonical_effect,
-                    applied_by=requester_username,
-                    reason=cone_trigger,
-                    duration=cone_call.cone_duration,
-                    condition=cone_call.cone_condition,
-                )
-            except Exception as exc:
-                logger.error(
-                    "ConeManager.apply() raised unexpectedly for target '%s': %s",
-                    cone_call.cone_target, exc, exc_info=True,
+            # Resolve target → Discord ID
+            target_discord_id = cone_manager.find_discord_id_by_username(cone_call.cone_target)
+            if not target_discord_id:
+                logger.warning(
+                    "Could not resolve uncone target '%s' to a Discord ID.",
+                    cone_call.cone_target,
                 )
                 outcome = ConeOutcome(
-                    status="error",
+                    status="target_unknown",
                     target=cone_call.cone_target,
-                    effect=canonical_effect,
-                    reason="A technical error occurred while applying the cone.",
+                    reason=(
+                        f"Could not find '{cone_call.cone_target}' in Discord. "
+                        "Ask the user to @mention them or use their exact username."
+                    ),
                 )
             else:
-                if result.success:
-                    record_cone_applied(cone_call.cone_target, cone_trigger)
-                    logger.info(
-                        "Cone applied: %s → %s (%s), trigger=%s",
-                        canonical_effect, cone_call.cone_target, target_discord_id, cone_trigger,
+                # Attempt remove
+                try:
+                    result = await cone_manager.remove(
+                        discord_id=target_discord_id,
+                        removed_by=requester_username,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "ConeManager.remove() raised unexpectedly for target '%s': %s",
+                        cone_call.cone_target, exc, exc_info=True,
                     )
                     outcome = ConeOutcome(
-                        status="applied",
+                        status="error",
                         target=cone_call.cone_target,
-                        effect=canonical_effect,
-                        duration=cone_call.cone_duration,
-                        condition=cone_call.cone_condition,
-                        reason=approval.reason,
+                        reason="A technical error occurred while removing the cone.",
                     )
                 else:
-                    logger.warning("ConeManager.apply() returned failure: %s", result.message)
+                    if result.success:
+                        logger.info(
+                            "Cone removed from: %s (%s)",
+                            cone_call.cone_target, target_discord_id,
+                        )
+                        outcome = ConeOutcome(
+                            status="unconed",
+                            target=cone_call.cone_target,
+                            reason=approval.reason,
+                        )
+                    else:
+                        logger.warning("ConeManager.remove() returned failure: %s", result.message)
+                        outcome = ConeOutcome(
+                            status="uncone_failed",
+                            target=cone_call.cone_target,
+                            reason=result.message,
+                        )
+    else:
+        # 1. Validate effect (default to uwu on unknown)
+        try:
+            canonical_effect = resolve_effect(cone_call.cone_effect)
+        except Exception:
+            logger.warning("Unknown cone effect '%s' — defaulting to 'uwu'.", cone_call.cone_effect)
+            canonical_effect = "uwu"
+
+        # 2. Validate trigger
+        valid_triggers = {"requested_approved", "requested_unapproved", "autonomous"}
+        cone_trigger = cone_call.cone_trigger if cone_call.cone_trigger in valid_triggers else "autonomous"
+
+        # Pipeline safeguard: if requester is an authorized user, force/promote trigger to requested_approved
+        cfg = get_config()
+        if requester_username.lower() in cfg.cone.permissions:
+            cone_trigger = "requested_approved"
+
+        # 3. Run two-tier approval
+        approval = await run_cone_approval(
+            cone_target=cone_call.cone_target,
+            cone_trigger=cone_trigger,
+            cone_effect=canonical_effect,
+            requester_username=requester_username,
+            recent_messages=recent_messages,
+            requester_state=requester_state,
+            cone_manager=cone_manager,
+        )
+
+        # 4. Build ConeOutcome based on result
+        if not approval.approved:
+            logger.debug(
+                "Cone denied for %s (%s): %s",
+                cone_call.cone_target, cone_trigger, approval.reason,
+            )
+            outcome = ConeOutcome(
+                status="denied",
+                target=cone_call.cone_target,
+                effect=canonical_effect,
+                reason=approval.reason,
+            )
+        else:
+            # Resolve target → Discord ID
+            target_discord_id = cone_manager.find_discord_id_by_username(cone_call.cone_target)
+            if not target_discord_id:
+                logger.warning(
+                    "Could not resolve cone target '%s' to a Discord ID.",
+                    cone_call.cone_target,
+                )
+                outcome = ConeOutcome(
+                    status="target_unknown",
+                    target=cone_call.cone_target,
+                    effect=canonical_effect,
+                    reason=(
+                        f"Could not find '{cone_call.cone_target}' in Discord. "
+                        "Ask the user to @mention them or use their exact username."
+                    ),
+                )
+            else:
+                # Attempt apply — catch all exceptions
+                try:
+                    result = await cone_manager.apply(
+                        discord_id=target_discord_id,
+                        effect=canonical_effect,
+                        applied_by=requester_username,
+                        reason=cone_trigger,
+                        duration=cone_call.cone_duration,
+                        condition=cone_call.cone_condition,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "ConeManager.apply() raised unexpectedly for target '%s': %s",
+                        cone_call.cone_target, exc, exc_info=True,
+                    )
                     outcome = ConeOutcome(
-                        status="apply_failed",
+                        status="error",
                         target=cone_call.cone_target,
                         effect=canonical_effect,
-                        reason=result.message,
+                        reason="A technical error occurred while applying the cone.",
                     )
+                else:
+                    if result.success:
+                        record_cone_applied(cone_call.cone_target, cone_trigger)
+                        logger.info(
+                            "Cone applied: %s → %s (%s), trigger=%s",
+                            canonical_effect, cone_call.cone_target, target_discord_id, cone_trigger,
+                        )
+                        outcome = ConeOutcome(
+                            status="applied",
+                            target=cone_call.cone_target,
+                            effect=canonical_effect,
+                            duration=cone_call.cone_duration,
+                            condition=cone_call.cone_condition,
+                            reason=approval.reason,
+                        )
+                    else:
+                        logger.warning("ConeManager.apply() returned failure: %s", result.message)
+                        outcome = ConeOutcome(
+                            status="apply_failed",
+                            target=cone_call.cone_target,
+                            effect=canonical_effect,
+                            reason=result.message,
+                        )
 
     # 5. Feed outcome back to Ghost and get a fresh, reactive response
     try:
@@ -474,6 +547,13 @@ async def _handle_cone_call(
                 "the cone details in character in your response. State exactly which effect was applied, "
                 "how long it lasts (the duration, if temporary), or what condition is required to remove it early. "
                 "This ensures everyone in chat knows what got applied, for how long, and how they can get free. "
+                "Keep this announcement completely natural, sassy, and fully in character!"
+            )
+        elif outcome.status == "unconed":
+            system_prompt += (
+                "\n\nCRITICAL CONE REMOVAL ANNOUNCEMENT RULE:\n"
+                "The cone has been successfully removed/lifted from the target! You MUST explicitly announce "
+                "this to the user in character in your response. State that they are now free from the cone. "
                 "Keep this announcement completely natural, sassy, and fully in character!"
             )
 

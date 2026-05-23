@@ -134,11 +134,12 @@ class ConeResult(BaseModel):
 
 class ConeToolCall(BaseModel):
     """
-    Parsed cone intent from Ghost's initiate_cone tool call.
+    Parsed cone intent from Ghost's initiate_cone or remove_cone tool call.
 
     Represents what Ghost wants to do — NOT Ghost's response.
     Response is generated reactively after the pipeline runs.
     """
+    tool_name: Literal["initiate_cone", "remove_cone"] = "initiate_cone"
     cone_target: str
     cone_effect: str
     cone_trigger: str                   # "requested_approved" | "requested_unapproved" | "autonomous"
@@ -153,7 +154,7 @@ class ConeOutcome(BaseModel):
     Passed back to Gemini as a function_response so Ghost can react
     to what actually happened (applied, denied, error) in its own voice.
     """
-    status: Literal["applied", "denied", "target_unknown", "apply_failed", "error"]
+    status: Literal["applied", "denied", "target_unknown", "apply_failed", "error", "unconed", "uncone_failed"]
     target: str
     effect: Optional[str] = None
     duration: Optional[str] = None

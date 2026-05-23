@@ -206,12 +206,36 @@ class GeminiClient(LLMClient):
                 ]
             )
 
+            remove_cone_tool = types.Tool(
+                function_declarations=[
+                    types.FunctionDeclaration(
+                        name="remove_cone",
+                        description=(
+                            "Remove an active text transformation (cone) from a Discord user's messages. "
+                            "Use this tool when a user has been coned and has successfully convinced you to uncone them, "
+                            "apologized, satisfied your removal condition, or if you decide to show mercy. "
+                            "Ghost will respond after learning whether the cone was successfully removed."
+                        ),
+                        parameters=types.Schema(
+                            type=types.Type.OBJECT,
+                            required=["cone_target"],
+                            properties={
+                                "cone_target": types.Schema(
+                                    type=types.Type.STRING,
+                                    description="Canonical Discord username of the person to uncone.",
+                                ),
+                            },
+                        ),
+                    )
+                ]
+            )
+
             config = types.GenerateContentConfig(
                 temperature=self._gen_config.temperature,
                 top_p=self._gen_config.top_p,
                 max_output_tokens=self._gen_config.max_output_tokens,
                 system_instruction=system_prompt if system_prompt else None,
-                tools=[initiate_cone_tool],
+                tools=[initiate_cone_tool, remove_cone_tool],
             )
 
             response = await self._client.aio.models.generate_content(
@@ -285,13 +309,21 @@ class GeminiClient(LLMClient):
             # Append Ghost's turn containing the function_call Part
             contents.append(raw_model_content)
 
+            # Resolve function name from raw_model_content
+            func_name = "initiate_cone"
+            if raw_model_content and hasattr(raw_model_content, "parts") and raw_model_content.parts:
+                for part in raw_model_content.parts:
+                    if hasattr(part, "function_call") and part.function_call:
+                        func_name = part.function_call.name
+                        break
+
             # Append the function_response as a user turn
             contents.append(
                 types.Content(
                     role="user",
                     parts=[
                         types.Part.from_function_response(
-                            name="initiate_cone",
+                            name=func_name,
                             response=outcome.model_dump(exclude_none=True),
                         )
                     ],
@@ -463,11 +495,21 @@ class GeminiClient(LLMClient):
                     if fc.name == "initiate_cone":
                         args: dict[str, Any] = dict(fc.args)
                         call = ConeToolCall(
+                            tool_name="initiate_cone",
                             cone_target=str(args.get("cone_target", "")),
                             cone_effect=str(args.get("cone_effect", "uwu")),
                             cone_trigger=str(args.get("cone_trigger", "autonomous")),
                             cone_duration=args.get("cone_duration") or None,
                             cone_condition=args.get("cone_condition") or None,
+                        )
+                        return ConeCallContext(call=call, raw_model_content=raw_content)
+                    elif fc.name == "remove_cone":
+                        args: dict[str, Any] = dict(fc.args)
+                        call = ConeToolCall(
+                            tool_name="remove_cone",
+                            cone_target=str(args.get("cone_target", "")),
+                            cone_effect="uwu",  # placeholder
+                            cone_trigger="autonomous",  # placeholder
                         )
                         return ConeCallContext(call=call, raw_model_content=raw_content)
         except (AttributeError, IndexError, KeyError) as exc:

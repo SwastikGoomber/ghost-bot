@@ -35,7 +35,7 @@ Set to `true` if the message is asking about something that happened before, ref
 - General small talk or reactions
 
 ### `cone_relevant`
-Set to `true` ONLY if someone is **explicitly and literally** asking for a cone to be applied right now in this message. The word "cone", an effect name applied to someone, or a clear direction to transform someone's speech.
+Set to `true` ONLY if someone is **explicitly and literally** asking for a cone to be applied or removed right now. This includes requests to "cone", "uncone", "remove cone", "free", "lift cone" or lift a speech transformation from a user, or clear directions to change/remove speech effects.
 
 **True examples:**
 - "cone swas"
@@ -43,13 +43,17 @@ Set to `true` ONLY if someone is **explicitly and literally** asking for a cone 
 - "can you shakespearify him"
 - "ghost cone her for a bit"
 - "put swas in brainrot mode"
+- "uncone swas"
+- "free puckz from the cone"
+- "please lift swas's uwu cone"
+- "can you remove the shakespeare cone?"
 
 **False examples:**
 - General chat, even if tense or annoying
 - "swas is being so annoying" (no explicit cone request)
 - "ghost you're mean" (not a cone request)
-- Discussions about cones in the past
-- Anything without a clear intent to cone RIGHT NOW
+- Discussions about cones in the past without requesting application/removal right now
+- Anything without a clear intent to cone or uncone RIGHT NOW
 
 > **Important:** You are a small, fast classifier. You do NOT have Ghost's personality or relationship context. Only flag explicit, unambiguous cone requests. Ghost (the main Gemini model) will handle all nuanced autonomous decisions.
 
