@@ -58,14 +58,12 @@ _RATE_LIMIT_RESPONSES = [
 
 _ERROR_RESPONSES = [
     "I feel some disturbance in the air... is it a bird? is it a plane? no! it's goomber fucking shit up again. broke my comms. ttyl.",
-    "something broke on my end and i'm like 90% sure it's goomber. he does this. constantly.",
-    "my brain just stopped working for a sec. goomber probably tripped over a server cable or something. give me a moment.",
-    "ugh, comms are down. i blame goomber. i always blame goomber. it's almost always goomber.",
-    "okay so that didn't work. goomber's been poking at the mothership console again hasn't he.",
-    "i tried to respond and literally nothing happened. classic goomber energy.",
-    "signal lost. goomber moment. try again in a bit.",
-    "hold on something's wrong with my... everything. goomber. it's goomber. i know it.",
-    "can't reach my brain rn. either goomber broke something or i'm having an existential moment. probably goomber.",
+    "Something broke on my end and I'm like 90 percent sure it's goomber. He does this. Constantly! BRB!",
+    "My brain just stopped working for a sec. Goomber probably tripped over a server cable or something, give me a moment.",
+    "Ah shit! I left the oven on! Talk later!",
+    "Comms signal lost... try again in a bit.",
+    "Hold on, be right back, just gotta get some milk.",
+    "Can't reach my brain rn. Either goomber broke something or I'm having an existential moment, probably both",
 ]
 
 # Module-level singleton router and taxonomy cache
@@ -375,6 +373,11 @@ async def _handle_cone_call(
     # 2. Validate trigger
     valid_triggers = {"requested_approved", "requested_unapproved", "autonomous"}
     cone_trigger = cone_call.cone_trigger if cone_call.cone_trigger in valid_triggers else "autonomous"
+
+    # Pipeline safeguard: if requester is an authorized user, force/promote trigger to requested_approved
+    cfg = get_config()
+    if requester_username.lower() in cfg.cone.permissions:
+        cone_trigger = "requested_approved"
 
     # 3. Run two-tier approval
     approval = await run_cone_approval(

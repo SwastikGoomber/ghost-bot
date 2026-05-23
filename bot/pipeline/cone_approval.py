@@ -5,7 +5,7 @@ Tier 0 — Programmatic gate (~1ms, no LLM):
     - Target already coned? → reject
     - Target coned in the last N minutes? → reject
     - Hourly total exceeded? → reject
-    - Approved crew member requested? → instant approve (skip Tier 1)
+    - Authorized user requested? → passing to approval agent with leniency (skip Tier 1 evaluation strictness)
 
 Tier 1 — Gemma 4 Approval Agent (~150ms, only for unapproved / autonomous):
     - Receives conversation context + trigger type + relationship summary
@@ -143,13 +143,13 @@ async def programmatic_gate(
                 reject_reason=f"Autonomous cone daily limit ({cfg.cone.autonomous_max_per_day}) reached.",
             )
 
-    # Check 5: permitted (approved) users who explicitly requested → still go through the agent,
+    # Check 5: permitted (authorized) users who explicitly requested → still go through the agent,
     # but the prompt treats them leniently since Ghost actually trusts them
     if cone_trigger == "requested_approved":
         requester_lower = requester_username.lower()
         if requester_lower in cfg.cone.permissions:
             logger.debug(
-                "Gate: permitted user %s — passing to approval agent with leniency.",
+                "Gate: authorized user %s — passing to approval agent with leniency.",
                 requester_lower,
             )
             return ProgrammaticGateResult(passed=True)
@@ -190,6 +190,7 @@ async def approval_agent(
     cone_effect: str,
     recent_messages: list[Message],
     requester_state: Optional[UserState],
+    is_requester_authorized: bool = False,
 ) -> ConeApprovalResult:
     """
     Ask Gemma 4 whether this cone should be approved.
@@ -197,11 +198,12 @@ async def approval_agent(
     Only called after Tier 0 passes AND the trigger is not "requested_approved".
 
     Args:
-        cone_target:     Who is being coned.
-        cone_trigger:    "requested_unapproved" | "autonomous"
-        cone_effect:     Effect name (e.g. "uwu").
-        recent_messages: Last 5 messages from the conversation.
-        requester_state: UserState of the requester (if known, else None).
+        cone_target:             Who is being coned.
+        cone_trigger:            "requested_unapproved" | "autonomous"
+        cone_effect:             Effect name (e.g. "uwu").
+        recent_messages:         Last 5 messages from the conversation.
+        requester_state:         UserState of the requester (if known, else None).
+        is_requester_authorized: Whether the requester is on the official permissions list.
 
     Returns:
         ConeApprovalResult(approved, reason).
@@ -243,6 +245,7 @@ async def approval_agent(
         .replace("{cone_trigger}", cone_trigger)
         .replace("{cone_target}", cone_target)
         .replace("{cone_effect}", cone_effect)
+        .replace("{is_requester_authorized}", "Yes" if is_requester_authorized else "No")
         .replace("{requester_relationship}", relationship_summary)
         .replace("{cone_history}", cone_history_summary)
     )
@@ -330,13 +333,16 @@ async def run_cone_approval(
         return ConeApprovalResult(approved=False, reason=gate.reject_reason)
 
     if gate.instant_approve:
-        return ConeApprovalResult(approved=True, reason="Instant approve — crew member request.")
+        return ConeApprovalResult(approved=True, reason="Instant approve — authorized user request.")
 
     # Tier 1
+    cfg = get_config()
+    is_requester_authorized = requester_username.lower() in cfg.cone.permissions
     return await approval_agent(
         cone_target=cone_target,
         cone_trigger=cone_trigger,
         cone_effect=cone_effect,
         recent_messages=recent_messages,
         requester_state=requester_state,
+        is_requester_authorized=is_requester_authorized,
     )

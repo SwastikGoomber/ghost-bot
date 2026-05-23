@@ -240,6 +240,9 @@ class ContextBuilder:
         if state.bio:
             lines.append(f"BIO: {state.bio}")
 
+        if username.lower() in get_config().cone.permissions:
+            lines.append("CONE PERMISSIONS: Authorized user (has explicit permission to request/remove cones)")
+
         # Relationship summary
         if state.summaries.relationship and \
                 state.summaries.relationship != "No additional information yet.":

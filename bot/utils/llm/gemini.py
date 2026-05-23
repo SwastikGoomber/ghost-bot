@@ -176,7 +176,7 @@ class GeminiClient(LLMClient):
                                     type=types.Type.STRING,
                                     description=(
                                         "Why the cone is happening. Must be one of: "
-                                        "'requested_approved' (an approved crew member asked), "
+                                        "'requested_approved' (an authorized user asked), "
                                         "'requested_unapproved' (a regular user asked), "
                                         "'autonomous' (your own spontaneous decision)."
                                     ),
