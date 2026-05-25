@@ -197,7 +197,12 @@ async def process_message(
         try:
             taxonomy = await get_taxonomy()
             planner = RAGQueryPlanner(taxonomy)
-            query = await planner.plan(message)
+            query = await planner.plan(
+                message,
+                recent_messages=list(user_state.recent_messages[-12:]),
+                channel_context=channel_context,
+                reply_context=reply_context,
+            )
             alias_map = state_manager.build_name_alias_map()
             rag_chunks = await retrieve(query, taxonomy=taxonomy, alias_map=alias_map)
             # Filter out low-quality chunks (significance < 2 if all are low)

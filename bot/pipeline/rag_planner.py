@@ -84,15 +84,24 @@ class RAGQueryPlanner:
     def __init__(self, taxonomy: TaxonomySnapshot) -> None:
         self._taxonomy = taxonomy
 
-    async def plan(self, message: str) -> RetrievalQuery:
+    async def plan(
+        self,
+        message: str,
+        recent_messages: Optional[list] = None,
+        channel_context: Optional[list] = None,
+        reply_context: Optional[object] = None,
+    ) -> RetrievalQuery:
         """
-        Generate a RetrievalQuery for the given message.
+        Generate a RetrievalQuery for the given message, using recent context if available.
 
         Falls back to a simple text-only query on any failure so the pipeline
         always gets *something* to pass to the retriever.
 
         Args:
             message: Raw user message text.
+            recent_messages: Optional list of recent Message objects representing conversation history.
+            channel_context: Optional list of ambient messages from the current channel.
+            reply_context: Optional message object that is being replied to.
 
         Returns:
             RetrievalQuery with logic-gate filters and semantic query text.
@@ -103,10 +112,40 @@ class RAGQueryPlanner:
             logger.error("RAG planner client is not an OllamaClient — using fallback query.")
             return _fallback_query(message, cfg.rag.retrieval_top_k)
 
+        # Build rich conversation history block
+        history_lines = []
+        
+        # 1. Inject reply target if present
+        if reply_context:
+            try:
+                history_lines.append(f"[Reply Target] {reply_context.username}: {reply_context.content}")
+            except AttributeError:
+                pass
+
+        # 2. Inject ambient channel messages if present
+        if channel_context:
+            for msg in channel_context:
+                try:
+                    history_lines.append(f"{msg.username}: {msg.content}")
+                except AttributeError:
+                    pass
+        # 3. Fallback to private user history if no channel context exists
+        elif recent_messages:
+            for msg in recent_messages:
+                speaker = "Ghost" if msg.from_bot else "User"
+                history_lines.append(f"{speaker}: {msg.content}")
+
+        history_block = ""
+        if history_lines:
+            # Cap to last 12 messages (6 turns) to avoid bloating prompt context
+            history_lines = history_lines[-12:]
+            history_block = "## Recent Conversation Context:\n" + "\n".join(history_lines) + "\n\n"
+
         taxonomy_text = _format_taxonomy(self._taxonomy)
         prompt = (
             _PLANNER_PROMPT_TEMPLATE
             .replace("{taxonomy_snapshot}", taxonomy_text)
+            .replace("{conversation_context}", history_block)
             .replace("{message}", message)
         )
 

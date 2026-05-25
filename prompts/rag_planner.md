@@ -70,6 +70,12 @@ Number of chunks to retrieve. Default 5. Use up to 10 for very broad queries.
 
 ---
 
+## Specific Lore Guidance (Lilly's Lore / Ghost's Origins)
+
+- **Lilly's Lore / Ghost's Origins**: When a user asks about Ghost's background, origins, mother, creation, or asks Ghost to recite "it" (referring to Lilly's lore), the correct individual target is `"lilly"` and the correct arc tag is `"arc:lilly_lore"`. Be sure to query and filter for these specifically to retrieve her backstory.
+
+---
+
 ## Rules
 
 1. **`query_text`** should be rephrased for best semantic search — use descriptive, content-rich language, not the raw user message
@@ -81,6 +87,8 @@ Number of chunks to retrieve. Default 5. Use up to 10 for very broad queries.
 7. Output ONLY valid JSON — no explanation
 
 ---
+
+{conversation_context}
 
 ## Message to process:
 

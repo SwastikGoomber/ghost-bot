@@ -35,12 +35,14 @@ class OllamaClient(LLMClient):
         temperature: float = 0.1,
         num_predict: int = 128,
         role: str = "",
+        think: bool | str | None = None,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.temperature = temperature
         self.num_predict = num_predict
         self.role = role
+        self.think = think
 
     # ------------------------------------------------------------------
     # Text generation — /api/chat
@@ -83,6 +85,8 @@ class OllamaClient(LLMClient):
                 "num_predict": self.num_predict,
             },
         }
+        if self.think is not None:
+            payload["think"] = self.think
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -169,6 +173,8 @@ class OllamaClient(LLMClient):
                 "num_predict": self.num_predict,
             },
         }
+        if self.think is not None:
+            payload["think"] = self.think
 
         try:
             async with aiohttp.ClientSession() as session:

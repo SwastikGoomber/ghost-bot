@@ -31,9 +31,9 @@ class ModelsConfig:
     chat: str = "gemini-2.5-flash-lite"
     vision: str = "gemini-2.0-flash"
     summary: str = "gemini-2.5-flash-lite"
-    router: str = "gemma4:e4b"
-    cone_approval: str = "gemma4:e4b"
-    rag_planner: str = "gemma4:e4b"
+    router: str = "gemma4:e2b-it-q4_K_M"
+    cone_approval: str = "gemma4:e2b-it-q4_K_M"
+    rag_planner: str = "gemma4:e2b-it-q4_K_M"
     embedder: str = "nomic-embed-text"
     extractor: str = "gemini-2.5-flash"
     arc_summarizer: str = "gemini-2.5-flash"
@@ -73,6 +73,7 @@ class GeminiConfig:
 class OllamaGenerationConfig:
     temperature: float = 0.1
     num_predict: int = 128  # Ollama's equivalent of max_output_tokens
+    think: bool | str | None = None
 
 
 @dataclass
@@ -205,9 +206,9 @@ def _load_config() -> Config:
         chat=models_raw.get("chat", "gemini-2.5-flash-lite"),
         vision=models_raw.get("vision", "gemini-2.0-flash"),
         summary=models_raw.get("summary", "gemini-2.5-flash-lite"),
-        router=models_raw.get("router", "gemma4:e4b"),
-        cone_approval=models_raw.get("cone_approval", "gemma4:e4b"),
-        rag_planner=models_raw.get("rag_planner", "gemma4:e4b"),
+        router=models_raw.get("router", "gemma4:e2b-it-q4_K_M"),
+        cone_approval=models_raw.get("cone_approval", "gemma4:e2b-it-q4_K_M"),
+        rag_planner=models_raw.get("rag_planner", "gemma4:e2b-it-q4_K_M"),
         embedder=models_raw.get("embedder", "nomic-embed-text"),
         extractor=models_raw.get("extractor", "gemini-2.5-flash"),
         arc_summarizer=models_raw.get("arc_summarizer", "gemini-2.5-flash"),
@@ -260,6 +261,7 @@ def _load_config() -> Config:
         return OllamaGenerationConfig(
             temperature=d.get("temperature", default_temp),
             num_predict=d.get("num_predict", default_predict),
+            think=d.get("think", None),
         )
     ollama_raw = raw.get("ollama", {})
     ollama = OllamaConfig(

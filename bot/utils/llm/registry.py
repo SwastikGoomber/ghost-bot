@@ -95,6 +95,7 @@ def _get_cached_client(role: str) -> LLMClient:
             temperature=gen.temperature,
             num_predict=gen.num_predict,
             role=role,
+            think=gen.think,
         )
 
     if role == "embed":
