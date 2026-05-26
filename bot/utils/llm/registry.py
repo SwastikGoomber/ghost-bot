@@ -78,8 +78,6 @@ def _get_cached_client(role: str) -> LLMClient:
         )
 
     if role in ("router", "rag_planner", "cone_approval"):
-        # Phase 5 — Gemma 4 via Ollama
-        ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
         if role == "router":
             model = cfg.models.router
             gen = cfg.ollama.router
@@ -89,19 +87,46 @@ def _get_cached_client(role: str) -> LLMClient:
         else:  # cone_approval
             model = cfg.models.cone_approval
             gen = cfg.ollama.cone_approval
-        return OllamaClient(
-            model=model,
-            base_url=ollama_url,
-            temperature=gen.temperature,
-            num_predict=gen.num_predict,
-            role=role,
-            think=gen.think,
-        )
+
+        if model.startswith(("gemini-", "gemma-")):
+            api_key_free = os.environ.get("GEMINI_API_KEY", "")
+            api_key_paid = os.environ.get("GEMINI_API_KEY_PAID") or None
+
+            thinking_budget = None
+            if gen.think is False or gen.think == 0:
+                thinking_budget = 0
+            elif gen.think == "low":
+                thinking_budget = 1024
+            elif isinstance(gen.think, int):
+                thinking_budget = gen.think
+
+            return GeminiClient(
+                api_key_free=api_key_free,
+                api_key_paid=api_key_paid,
+                preferred_source="free",
+                role=role,
+                model=model,
+                temperature=gen.temperature,
+                top_p=0.9,
+                max_output_tokens=gen.num_predict,
+                thinking_budget=thinking_budget,
+            )
+        else:
+            ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+            return OllamaClient(
+                model=model,
+                base_url=ollama_url,
+                temperature=gen.temperature,
+                num_predict=gen.num_predict,
+                role=role,
+                think=gen.think,
+                keep_alive=gen.keep_alive,
+            )
 
     if role == "embed":
         # Phase 4 — nomic-embed-large via Ollama
         ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        return OllamaClient(model=cfg.models.embedder, base_url=ollama_url, role=role)
+        return OllamaClient(model=cfg.models.embedder, base_url=ollama_url, role=role, keep_alive=-1)
 
     raise ConfigError(
         f"Unknown LLM role '{role}'. Valid roles: chat, vision, summary, "

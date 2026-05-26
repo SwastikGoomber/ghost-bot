@@ -1,10 +1,10 @@
 models:
   chat: "gemini-3.1-flash-lite"
   vision: "gemini-2.0-flash"
-  summary: "gemini-2.5-flash"
-  router: "gemma4:e2b-it-q4_K_M"             # Phase 5 - Gemma 4 local router via Ollama
-  cone_approval: "gemma4:e2b-it-q4_K_M"      # Phase 5 - Gemma 4 local cone approval agent via Ollama
-  rag_planner: "gemma4:e2b-it-q4_K_M"        # Phase 5 - Gemma 4 local RAG query planner via Ollama
+  summary: "gemini-2.5-flash" 
+  router: "gemma-4-26b-a4b-it"             # Phase 5 - Cloud Gemma 4 31B router via Gemini Free API (1.5K RPD cap)
+  cone_approval: "gemma-4-26b-a4b-it"      # Phase 5 - Cloud Gemma 4 31B cone approval agent via Gemini Free API
+  rag_planner: "gemma-4-26b-a4b-it"        # Phase 5 - Cloud Gemma 4 31B RAG query planner via Gemini Free API
   embedder: "nomic-embed-text"    # Phase 4 - local embeddings via Ollama (768 dimensions)
   extractor: "gemini-2.5-flash"    # Phase 4 - RAG extraction (batch mode, needs quality + long output)
   arc_summarizer: "gemini-2.5-flash" # Phase 4 - arc summary generation
@@ -14,8 +14,8 @@ models:
     chat: "free"
     vision: "free"
     summary: "paid"
-    extractor: "free"
-    arc_summarizer: "free"
+    extractor: "paid"
+    arc_summarizer: "paid"
 
 gemini:
   paid_limits:
@@ -33,7 +33,7 @@ gemini:
   summary:
     temperature: 0.3
     top_p: 0.9
-    max_output_tokens: 2000
+    max_output_tokens: 8000
   extraction:
     temperature: 0.1   # Low temp for structured JSON output — consistency matters here
     top_p: 0.9
@@ -48,14 +48,17 @@ ollama:
     temperature: 0.1  # Low temp — this is classification, not creativity
     num_predict: 256  # Small JSON but Gemma may emit preamble tokens before it
     think: false
+    keep_alive: -1    # Keep model indefinitely warmed in memory
   rag_planner:
     temperature: 0.2
     num_predict: 1024  # RetrievalQuery JSON can be moderately large
-    think: "low"
+    think: false
+    keep_alive: -1    # Keep model indefinitely warmed in memory
   cone_approval:
     temperature: 0.2
     num_predict: 2048  # Gemma 4 E4B thinking tokens count toward this limit; needs headroom
     think: false
+    keep_alive: -1    # Keep model indefinitely warmed in memory
 
 memory:
   message_history_limit: 15

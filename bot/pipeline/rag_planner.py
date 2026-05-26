@@ -108,8 +108,8 @@ class RAGQueryPlanner:
         """
         cfg = get_config()
         client = get_llm_client("rag_planner")
-        if not isinstance(client, OllamaClient):
-            logger.error("RAG planner client is not an OllamaClient — using fallback query.")
+        if client is None:
+            logger.error("RAG planner client is not available — using fallback query.")
             return _fallback_query(message, cfg.rag.retrieval_top_k)
 
         # Build rich conversation history block
@@ -142,17 +142,17 @@ class RAGQueryPlanner:
             history_block = "## Recent Conversation Context:\n" + "\n".join(history_lines) + "\n\n"
 
         taxonomy_text = _format_taxonomy(self._taxonomy)
-        prompt = (
-            _PLANNER_PROMPT_TEMPLATE
-            .replace("{taxonomy_snapshot}", taxonomy_text)
-            .replace("{conversation_context}", history_block)
-            .replace("{message}", message)
-        )
+        system_prompt = _PLANNER_PROMPT_TEMPLATE.replace("{taxonomy_snapshot}", taxonomy_text)
+
+        user_content = ""
+        if history_block:
+            user_content += f"{history_block}\n"
+        user_content += f"## Message to process:\n{message}"
 
         try:
             raw = await client.generate_json(
-                messages=[{"role": "user", "content": message}],
-                system_prompt=prompt,
+                messages=[{"role": "user", "content": user_content}],
+                system_prompt=system_prompt,
             )
             
             cleaned_raw = raw.strip()

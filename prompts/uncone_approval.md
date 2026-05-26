@@ -20,26 +20,7 @@ Output a single JSON object:
 
 ---
 
-## Active Cone Details
 
-- **Target:** {cone_target}
-- **Current effect:** {cone_effect}
-- **Applied by:** {applied_by}
-- **Original reason/trigger:** {original_trigger} (e.g. requested_approved, requested_unapproved, autonomous)
-- **Original reason text:** {original_reason}
-- **Time elapsed since coned:** {time_elapsed}
-
----
-
-## Uncone Request Details
-
-- **Requester:** {requester_username}
-- **Requester is authorized user:** {is_requester_authorized}
-- **Requester relationship summary:** {requester_relationship}
-- **Recent conversation context:**
-{conversation_context}
-
----
 
 ## Approval Standards
 

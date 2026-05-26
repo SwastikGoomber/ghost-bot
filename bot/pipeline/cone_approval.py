@@ -225,8 +225,8 @@ async def approval_agent(
         ConeApprovalResult(approved, reason).
     """
     client = get_llm_client("cone_approval")
-    if not isinstance(client, OllamaClient):
-        logger.error("Cone approval client is not an OllamaClient — denying by default.")
+    if client is None:
+        logger.error("Cone approval client is not available — denying by default.")
         return ConeApprovalResult(approved=False, reason="Approval client unavailable.")
 
     # Build context string from recent messages
@@ -255,21 +255,24 @@ async def approval_agent(
         f"{auto_today} autonomous cones today."
     )
 
-    prompt = (
-        _APPROVAL_PROMPT_TEMPLATE
-        .replace("{conversation_context}", conversation_context)
-        .replace("{cone_trigger}", cone_trigger)
-        .replace("{cone_target}", cone_target)
-        .replace("{cone_effect}", cone_effect)
-        .replace("{is_requester_authorized}", "Yes" if is_requester_authorized else "No")
-        .replace("{requester_relationship}", relationship_summary)
-        .replace("{cone_history}", cone_history_summary)
+    user_content = (
+        "## Case Context for Decision:\n\n"
+        f"- **Target:** {cone_target}\n"
+        f"- **Trigger type:** {cone_trigger}\n"
+        f"- **Requested effect:** {cone_effect}\n"
+        f"- **Requester is authorized user:** {'Yes' if is_requester_authorized else 'No'}\n"
+        f"- **Requester relationship summary:** {relationship_summary}\n"
+        f"- **Recent cone history:** {cone_history_summary}\n\n"
+        "### Recent Conversation Context:\n"
+        f"{conversation_context}\n\n"
+        "### Decision Request:\n"
+        f"Should we approve coning {cone_target} with {cone_effect}? Output only the JSON response matching the schema."
     )
 
     try:
         raw = await client.generate_json(
-            messages=[{"role": "user", "content": "Evaluate this cone request."}],
-            system_prompt=prompt,
+            messages=[{"role": "user", "content": user_content}],
+            system_prompt=_APPROVAL_PROMPT_TEMPLATE,
         )
         
         cleaned_raw = raw.strip()
@@ -440,8 +443,8 @@ async def uncone_approval_agent(
     from bot.utils.llm.ollama import OllamaClient
 
     client = get_llm_client("cone_approval")
-    if not isinstance(client, OllamaClient):
-        logger.error("Cone approval client is not an OllamaClient — denying by default.")
+    if client is None:
+        logger.error("Cone approval client is not available — denying by default.")
         return ConeApprovalResult(approved=False, reason="Approval client unavailable.")
 
     # Format recent conversation context
@@ -461,24 +464,29 @@ async def uncone_approval_agent(
     time_elapsed_str = format_elapsed_time(elapsed_seconds)
 
     # Build prompt
-    prompt = (
-        _UNCONE_PROMPT_TEMPLATE
-        .replace("{cone_target}", cone_target)
-        .replace("{cone_effect}", active_cone.effect)
-        .replace("{applied_by}", active_cone.applied_by)
-        .replace("{original_trigger}", active_cone.reason)
-        .replace("{original_reason}", active_cone.reason)
-        .replace("{time_elapsed}", time_elapsed_str)
-        .replace("{requester_username}", requester_username)
-        .replace("{is_requester_authorized}", "Yes" if is_requester_authorized else "No")
-        .replace("{requester_relationship}", relationship_summary)
-        .replace("{conversation_context}", conversation_context)
+    user_content = (
+        "## Case Context for Decision:\n\n"
+        "### Active Cone Details\n"
+        f"- **Target:** {cone_target}\n"
+        f"- **Current effect:** {active_cone.effect}\n"
+        f"- **Applied by:** {active_cone.applied_by}\n"
+        f"- **Original reason/trigger:** {active_cone.reason}\n"
+        f"- **Original reason text:** {active_cone.reason}\n"
+        f"- **Time elapsed since coned:** {time_elapsed_str}\n\n"
+        "### Uncone Request Details\n"
+        f"- **Requester:** {requester_username}\n"
+        f"- **Requester is authorized user:** {'Yes' if is_requester_authorized else 'No'}\n"
+        f"- **Requester relationship summary:** {relationship_summary}\n\n"
+        "### Recent Conversation Context:\n"
+        f"{conversation_context}\n\n"
+        "### Decision Request:\n"
+        f"Should we approve removing the cone from {cone_target}? Output only the JSON response matching the schema."
     )
 
     try:
         raw = await client.generate_json(
-            messages=[{"role": "user", "content": "Evaluate this uncone request."}],
-            system_prompt=prompt,
+            messages=[{"role": "user", "content": user_content}],
+            system_prompt=_UNCONE_PROMPT_TEMPLATE,
         )
 
         cleaned_raw = raw.strip()

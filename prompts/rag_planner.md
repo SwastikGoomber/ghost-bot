@@ -86,10 +86,4 @@ Number of chunks to retrieve. Default 5. Use up to 10 for very broad queries.
 6. Keep `top_k` at 5 unless the query is very broad
 7. Output ONLY valid JSON — no explanation
 
----
 
-{conversation_context}
-
-## Message to process:
-
-{message}

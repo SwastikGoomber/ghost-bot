@@ -36,6 +36,7 @@ class OllamaClient(LLMClient):
         num_predict: int = 128,
         role: str = "",
         think: bool | str | None = None,
+        keep_alive: str | int | None = -1,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
@@ -43,6 +44,7 @@ class OllamaClient(LLMClient):
         self.num_predict = num_predict
         self.role = role
         self.think = think
+        self.keep_alive = keep_alive
 
     # ------------------------------------------------------------------
     # Text generation — /api/chat
@@ -80,6 +82,7 @@ class OllamaClient(LLMClient):
             "model": self.model,
             "messages": ollama_messages,
             "stream": False,
+            "keep_alive": self.keep_alive,
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.num_predict,
@@ -168,6 +171,7 @@ class OllamaClient(LLMClient):
             "messages": ollama_messages,
             "stream": False,
             "format": "json",
+            "keep_alive": self.keep_alive,
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.num_predict,

@@ -158,12 +158,14 @@ class GeminiClient(LLMClient):
         temperature: float = 0.9,
         top_p: float = 0.9,
         max_output_tokens: int = 1000,
+        thinking_budget: Optional[int] = None,
     ) -> None:
         self.api_key_free = api_key_free
         self.api_key_paid = api_key_paid
         self.preferred_source = preferred_source
         self.role = role
         self.model = model
+        self.thinking_budget = thinking_budget
         self._gen_config = types.GenerateContentConfig(
             temperature=temperature,
             top_p=top_p,
@@ -172,6 +174,28 @@ class GeminiClient(LLMClient):
         self._client_free = genai.Client(api_key=api_key_free)
         self._client_paid = genai.Client(api_key=api_key_paid) if api_key_paid else None
         self._tracker = GeminiUsageTracker()
+
+    def _build_generation_config(
+        self,
+        system_prompt: Optional[str] = None,
+        response_mime_type: Optional[str] = None,
+        tools: Optional[list] = None,
+    ) -> types.GenerateContentConfig:
+        """Centralized helper to build GenerateContentConfig, dynamically injecting thinking budget."""
+        config_args = {
+            "temperature": self._gen_config.temperature,
+            "top_p": self._gen_config.top_p,
+            "max_output_tokens": self._gen_config.max_output_tokens,
+            "system_instruction": system_prompt if system_prompt else None,
+        }
+        if response_mime_type:
+            config_args["response_mime_type"] = response_mime_type
+        if tools:
+            config_args["tools"] = tools
+        if self.thinking_budget is not None and self.thinking_budget > 0:
+            config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=self.thinking_budget)
+
+        return types.GenerateContentConfig(**config_args)
 
     @property
     def _is_chat(self) -> bool:
@@ -265,6 +289,11 @@ class GeminiClient(LLMClient):
                 await self._tracker.increment_paid_calls(is_chat=self._is_chat)
             return res
         except Exception as exc:
+            # Self-healing: if the model does not support thinking_config, disable and retry instantly!
+            if "thinking" in str(exc).lower() and self.thinking_budget is not None:
+                logger.warning("Thinking config not supported for model %s — disabling and retrying.", self.model)
+                self.thinking_budget = None
+                return await self._execute_with_retry(api_func)
             try:
                 self._handle_exception(exc)
             except LLMRateLimitError as rate_exc:
@@ -317,13 +346,8 @@ class GeminiClient(LLMClient):
             LLMError:          on any other API failure.
         """
         contents = self._build_contents(messages)
-        config = types.GenerateContentConfig(
-            temperature=self._gen_config.temperature,
-            top_p=self._gen_config.top_p,
-            max_output_tokens=self._gen_config.max_output_tokens,
-            system_instruction=system_prompt if system_prompt else None,
-        )
         async def _call(cli: genai.Client):
+            config = self._build_generation_config(system_prompt=system_prompt)
             return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
@@ -468,15 +492,11 @@ class GeminiClient(LLMClient):
             ]
         )
 
-        config = types.GenerateContentConfig(
-            temperature=self._gen_config.temperature,
-            top_p=self._gen_config.top_p,
-            max_output_tokens=self._gen_config.max_output_tokens,
-            system_instruction=system_prompt if system_prompt else None,
-            tools=[initiate_cone_tool, remove_cone_tool],
-        )
-
         async def _call(cli: genai.Client):
+            config = self._build_generation_config(
+                system_prompt=system_prompt,
+                tools=[initiate_cone_tool, remove_cone_tool],
+            )
             return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
@@ -581,14 +601,8 @@ class GeminiClient(LLMClient):
             )
         )
 
-        config = types.GenerateContentConfig(
-            temperature=self._gen_config.temperature,
-            top_p=self._gen_config.top_p,
-            max_output_tokens=self._gen_config.max_output_tokens,
-            system_instruction=system_prompt if system_prompt else None,
-        )
-
         async def _call(cli: genai.Client):
+            config = self._build_generation_config(system_prompt=system_prompt)
             return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
@@ -647,14 +661,11 @@ class GeminiClient(LLMClient):
             LLMError:          on any other API failure or empty response.
         """
         contents = self._build_contents(messages)
-        config = types.GenerateContentConfig(
-            temperature=self._gen_config.temperature,
-            top_p=self._gen_config.top_p,
-            max_output_tokens=self._gen_config.max_output_tokens,
-            system_instruction=system_prompt if system_prompt else None,
-            response_mime_type="application/json",
-        )
         async def _call(cli: genai.Client):
+            config = self._build_generation_config(
+                system_prompt=system_prompt,
+                response_mime_type="application/json",
+            )
             return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
@@ -715,14 +726,8 @@ class GeminiClient(LLMClient):
                 types.Content(role="user", parts=image_parts)
             )
 
-        config = types.GenerateContentConfig(
-            temperature=self._gen_config.temperature,
-            top_p=self._gen_config.top_p,
-            max_output_tokens=self._gen_config.max_output_tokens,
-            system_instruction=system_prompt if system_prompt else None,
-        )
-
         async def _call(cli: genai.Client):
+            config = self._build_generation_config(system_prompt=system_prompt)
             return await cli.aio.models.generate_content(
                 model=self.model,
                 contents=contents,

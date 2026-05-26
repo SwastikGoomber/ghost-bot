@@ -74,6 +74,7 @@ class OllamaGenerationConfig:
     temperature: float = 0.1
     num_predict: int = 128  # Ollama's equivalent of max_output_tokens
     think: bool | str | None = None
+    keep_alive: str | int | None = -1  # Default to infinite warming
 
 
 @dataclass
@@ -262,6 +263,7 @@ def _load_config() -> Config:
             temperature=d.get("temperature", default_temp),
             num_predict=d.get("num_predict", default_predict),
             think=d.get("think", None),
+            keep_alive=d.get("keep_alive", -1),
         )
     ollama_raw = raw.get("ollama", {})
     ollama = OllamaConfig(

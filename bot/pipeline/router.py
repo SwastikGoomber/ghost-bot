@@ -62,8 +62,8 @@ class IntentRouter:
             RouterFlags with per-route booleans.
         """
         client = get_llm_client("router")
-        if not isinstance(client, OllamaClient):
-            logger.error("Router client is not an OllamaClient — skipping routing.")
+        if client is None:
+            logger.error("Router client is not available — skipping routing.")
             return RouterFlags()
 
         try:

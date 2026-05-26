@@ -25,22 +25,7 @@ Ghost is a snarky, sarcastic, dramatic dragon who has a strong sense of loyalty 
 
 ---
 
-## Conversation Context
 
-{conversation_context}
-
----
-
-## Cone Request Details
-
-- **Trigger type:** {cone_trigger}
-- **Target:** {cone_target}
-- **Requested effect:** {cone_effect}
-- **Requester is authorized user:** {is_requester_authorized}
-- **Requester relationship summary:** {requester_relationship}
-- **Recent cone history:** {cone_history}
-
----
 
 ## Approval Standards by Trigger Type
 
