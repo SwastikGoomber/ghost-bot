@@ -208,7 +208,19 @@ class GhostDiscordBot(commands.Bot):
             )
 
         # ------------------------------------------------------------------
-        # Persist conversation (only for genuine interactions)
+        # Send response immediately to minimize perceived latency
+        # ------------------------------------------------------------------
+        if message_was_deleted:
+            sent_message = await message.channel.send(f"{message.author.mention} {response}")
+            self._record_channel_message(sent_message)
+        else:
+            sent_message = await message.reply(response)
+            self._record_channel_message(sent_message)
+
+        self._record_request()
+
+        # ------------------------------------------------------------------
+        # Persist conversation (after sending response to avoid blocking user)
         # ------------------------------------------------------------------
         if response not in _NON_INTERACTION_RESPONSES:
             await self._state.add_message(platform_key, message.content, False, message.author.name)
@@ -220,18 +232,6 @@ class GhostDiscordBot(commands.Bot):
                     logger.warning("Summary update failed for %s: %s", platform_key, msg)
         else:
             await self._state.save_states()
-
-        # ------------------------------------------------------------------
-        # Send response
-        # ------------------------------------------------------------------
-        if message_was_deleted:
-            sent_message = await message.channel.send(f"{message.author.mention} {response}")
-            self._record_channel_message(sent_message)
-        else:
-            sent_message = await message.reply(response)
-            self._record_channel_message(sent_message)
-
-        self._record_request()
 
     def _get_channel_context(self, channel_id: int) -> list[ChannelContextMessage]:
         """Return the current rolling context window for a Discord channel."""

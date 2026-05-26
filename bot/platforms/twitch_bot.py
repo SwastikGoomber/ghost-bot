@@ -213,19 +213,7 @@ class GhostTwitchBot(commands.Bot):
         )
 
         # ------------------------------------------------------------------
-        # Persist conversation
-        # ------------------------------------------------------------------
-        if response not in _NON_INTERACTION_RESPONSES:
-            await self._state.add_message(platform_key, text, False, chatter_name)
-            await self._state.add_message(platform_key, response, True, cfg.bot.name)
-
-            if self._state.needs_summary_update(platform_key):
-                success, msg = await self._state.update_summaries(platform_key)
-                if not success:
-                    logger.warning("Summary update failed for %s: %s", platform_key, msg)
-
-        # ------------------------------------------------------------------
-        # Send response — reply to the user via Helix API
+        # Send response immediately to minimize perceived latency
         # ------------------------------------------------------------------
         reply = f"@{chatter_name} {response}"
         # Twitch has a 500-char hard limit
@@ -241,6 +229,18 @@ class GhostTwitchBot(commands.Bot):
             )
         except Exception as exc:
             logger.error("Failed to send Twitch message: %s", exc)
+
+        # ------------------------------------------------------------------
+        # Persist conversation (after sending response to avoid blocking user)
+        # ------------------------------------------------------------------
+        if response not in _NON_INTERACTION_RESPONSES:
+            await self._state.add_message(platform_key, text, False, chatter_name)
+            await self._state.add_message(platform_key, response, True, cfg.bot.name)
+
+            if self._state.needs_summary_update(platform_key):
+                success, msg = await self._state.update_summaries(platform_key)
+                if not success:
+                    logger.warning("Summary update failed for %s: %s", platform_key, msg)
 
     # ------------------------------------------------------------------
     # Commands
