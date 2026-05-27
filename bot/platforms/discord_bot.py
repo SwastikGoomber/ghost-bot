@@ -26,12 +26,12 @@ from typing import Optional
 import discord
 from discord.ext import commands, tasks
 
-from ..utils.config import get_config
-from ..utils.models import ChannelContextMessage, Platform
-from ..memory.state import StateManager
-from ..cone.manager import ConeManager
-from ..pipeline.context import ContextBuilder
-from ..pipeline.handler import process_message, _ERROR_RESPONSES, _RATE_LIMIT_RESPONSES
+from bot.utils.config import get_config
+from bot.utils.models import ChannelContextMessage, Platform
+from bot.memory.state import StateManager
+from bot.cone.manager import ConeManager
+from bot.pipeline.context import ContextBuilder
+from bot.pipeline.handler import process_message, _ERROR_RESPONSES, _RATE_LIMIT_RESPONSES
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ class GhostDiscordBot(commands.Bot):
                 except (discord.NotFound, discord.Forbidden):
                     pass
 
-                from ..cone.effects import apply_effect
+                from bot.cone import apply_effect
                 transformed = apply_effect(message.content, effect)
 
                 webhook = await self._get_or_create_webhook(message.channel)

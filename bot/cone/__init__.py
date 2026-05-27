@@ -9,6 +9,6 @@ Public surface:
 """
 
 from .manager import ConeManager
-from .effects import apply_effect, ALL_EFFECT_NAMES, EFFECT_NAMES_SORTED
+from .registry import apply_effect, ALL_EFFECT_NAMES, EFFECT_NAMES_SORTED
 
 __all__ = ["ConeManager", "apply_effect", "ALL_EFFECT_NAMES", "EFFECT_NAMES_SORTED"]

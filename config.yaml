@@ -1,6 +1,6 @@
 models:
   chat: "gemini-3.1-flash-lite"
-  vision: "gemini-2.0-flash"
+  vision: "gemini-3.1-flash-lite"
   summary: "gemini-2.5-flash" 
   router: "gemma-4-26b-a4b-it"             # Phase 5 - Cloud Gemma 4 31B router via Gemini Free API (1.5K RPD cap)
   cone_approval: "gemma-4-26b-a4b-it"      # Phase 5 - Cloud Gemma 4 31B cone approval agent via Gemini Free API
@@ -79,6 +79,7 @@ cone:
   per_target_cooldown_minutes: 20   # Min time between cones on the same target
   hourly_limit: 10                  # Max total cones applied in any rolling 60-min window
   autonomous_max_per_day: 5         # Hard cap on Ghost-initiated autonomous cones per day
+  caveman_similarity_threshold: 0.7 # Precise similarity threshold for Advanced Caveman effect
 
 bot:
   name: "Ghost"

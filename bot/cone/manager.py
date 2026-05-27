@@ -15,9 +15,9 @@ import re
 import time
 from typing import TYPE_CHECKING, Optional
 
-from ..utils.exceptions import ConeEffectNotFoundError
-from ..utils.models import ConeCondition, ConeData, ConeResult
-from .effects.registry import resolve as resolve_effect
+from bot.utils.exceptions import ConeEffectNotFoundError
+from bot.utils.models import ConeCondition, ConeData, ConeResult
+from bot.cone.registry import resolve as resolve_effect
 
 if TYPE_CHECKING:
     from ..memory.state import StateManager

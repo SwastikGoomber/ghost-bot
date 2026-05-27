@@ -38,8 +38,8 @@ from ..utils.models import (
 )
 from ..memory.state import StateManager
 from ..memory.rag import retrieve, format_for_injection
-from ..cone import apply_effect
-from ..cone.effects.registry import resolve as resolve_effect
+from bot.cone import apply_effect
+from bot.cone.registry import resolve as resolve_effect
 from .context import ContextBuilder
 from .router import IntentRouter
 from .rag_planner import RAGQueryPlanner

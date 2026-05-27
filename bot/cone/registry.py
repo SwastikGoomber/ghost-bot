@@ -8,7 +8,7 @@ Rules:
 - The LLM tool schema is generated from EFFECTS.keys() automatically — no manual sync.
 
 Adding a new effect:
-    1. Add the transform function to basic.py or advanced.py.
+    1. Create a dedicated effect file under effects/ (e.g. effects/shakespeare.py).
     2. Add an entry to EFFECTS (or ALIASES if it's an alias).
     3. Done. Tool schemas auto-update.
 """
@@ -17,16 +17,23 @@ from __future__ import annotations
 
 from typing import Callable
 
-from ...utils.exceptions import ConeEffectNotFoundError
-from .basic import (
-    transform_uwu,
-    transform_pirate,
-    transform_shakespeare,
-    transform_caveman,
-    transform_drunk,
-)
-from .advanced import apply_advanced_effect, is_advanced_effect
-from .protection import apply_with_protected_spans
+from bot.utils.exceptions import ConeEffectNotFoundError
+from bot.cone.effects.uwu import transform_uwu
+from bot.cone.effects.pirate import transform_pirate
+from bot.cone.effects.shakespeare import transform_shakespeare
+from bot.cone.effects.caveman import apply_caveman, transform_caveman
+from bot.cone.effects.drunk import transform_drunk
+from bot.cone.effects.slayspeak import apply_slayspeak
+from bot.cone.effects.brainrot import apply_brainrot
+from bot.cone.effects.scrum import apply_scrum
+from bot.cone.effects.linkedin import apply_linkedin
+from bot.cone.effects.crisis import apply_crisis
+from bot.cone.effects.canadian import apply_canadian
+from bot.cone.effects.vsauce import apply_vsauce
+from bot.cone.effects.british import apply_british
+from bot.cone.effects.oni import apply_oni
+from bot.cone.effects.dyslexia import apply_dyslexia
+from bot.cone.protection import apply_with_protected_spans
 
 
 # ---------------------------------------------------------------------------
@@ -34,23 +41,21 @@ from .protection import apply_with_protected_spans
 # ---------------------------------------------------------------------------
 
 EFFECTS: dict[str, Callable[[str], str]] = {
-    # Basic (no spaCy required)
     "uwu": transform_uwu,
     "pirate": transform_pirate,
     "shakespeare": transform_shakespeare,
-    "caveman": transform_caveman,
+    "caveman": lambda t: apply_caveman(t) or transform_caveman(t),
     "drunk": transform_drunk,
-    # Advanced (spaCy-powered, routed through advanced.py)
-    "slayspeak": lambda t: apply_advanced_effect(t, "slayspeak") or t,
-    # "brainrot": lambda t: apply_advanced_effect(t, "brainrot") or t,
-    # "scrum": lambda t: apply_advanced_effect(t, "scrum") or t,
-    # "linkedin": lambda t: apply_advanced_effect(t, "linkedin") or t,
-    # "crisis": lambda t: apply_advanced_effect(t, "crisis") or t,
-    "canadian": lambda t: apply_advanced_effect(t, "canadian") or t,
-    "vsauce": lambda t: apply_advanced_effect(t, "vsauce") or t,
-    "bri": lambda t: apply_advanced_effect(t, "bri") or t,
-    "oni": lambda t: apply_advanced_effect(t, "oni") or t,
-    "dyslexia": lambda t: apply_advanced_effect(t, "dyslexia") or t,
+    "slayspeak": apply_slayspeak,
+    # "brainrot": apply_brainrot,
+    # "scrum": apply_scrum,
+    # "linkedin": apply_linkedin,
+    # "crisis": apply_crisis,
+    "canadian": apply_canadian,
+    "vsauce": apply_vsauce,
+    "bri": apply_british,
+    "oni": apply_oni,
+    "dyslexia": apply_dyslexia,
 }
 
 # Alternate names that map to a canonical effect
@@ -75,6 +80,21 @@ ALL_EFFECT_NAMES: frozenset[str] = frozenset(EFFECTS.keys()) | frozenset(ALIASES
 
 # Sorted list for use in LLM tool schemas and validation messages
 EFFECT_NAMES_SORTED: list[str] = sorted(ALL_EFFECT_NAMES)
+
+_ADVANCED_EFFECTS = frozenset({
+    "slayspeak", "valley",
+    "canadian", "polite",
+    "vsauce", "conspiracy",
+    "bri", "british",
+    "oni", "censor",
+    "dyslexia", "dickslexia",
+    "caveman", "unga",
+})
+
+
+def is_advanced_effect(effect: str) -> bool:
+    """True if this effect name uses spaCy features internally."""
+    return effect.lower() in _ADVANCED_EFFECTS
 
 
 def resolve(effect: str) -> str:

@@ -100,6 +100,7 @@ class ConeConfig:
     per_target_cooldown_minutes: int = 60
     hourly_limit: int = 5
     autonomous_max_per_day: int = 2
+    caveman_similarity_threshold: float = 0.7
 
 
 @dataclass
@@ -255,6 +256,7 @@ def _load_config() -> Config:
         per_target_cooldown_minutes=int(cone_raw.get("per_target_cooldown_minutes", 60)),
         hourly_limit=int(cone_raw.get("hourly_limit", 5)),
         autonomous_max_per_day=int(cone_raw.get("autonomous_max_per_day", 2)),
+        caveman_similarity_threshold=float(cone_raw.get("caveman_similarity_threshold", 0.7)),
     )
 
     # --- ollama ---
