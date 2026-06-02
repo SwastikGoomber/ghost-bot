@@ -80,7 +80,7 @@ cone:
   hourly_limit: 10                  # Max total cones applied in any rolling 60-min window
   autonomous_max_per_day: 5         # Hard cap on Ghost-initiated autonomous cones per day
   caveman_similarity_threshold: 0.7 # Precise similarity threshold for Advanced Caveman effect
-  no_cone_channel_ids: []            # Channel IDs to bypass coning text transformation
+  no_cone_channel_ids: [1473095923075645460]            # Channel IDs to bypass coning text transformation
 
 bot:
   name: "Ghost"
@@ -96,7 +96,7 @@ bot:
 discord:
   max_message_length: 2000
   global_context_message_limit: 30
-  no_router_channel_ids: []  # Channel IDs to bypass intent router and RAG retrieval
+  no_router_channel_ids: [1473095923075645460]  # Channel IDs to bypass intent router and RAG retrieval
   custom_emotes:
     # use the full bot-renderable token: <:name:id> or <a:name:id>
     - name: "<:POUT:1496184066062680217>"
