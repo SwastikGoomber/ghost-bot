@@ -85,5 +85,6 @@ Number of chunks to retrieve. Default 5. Use up to 10 for very broad queries.
 5. Default to `OR` when you want any matching chunk
 6. Keep `top_k` at 5 unless the query is very broad
 7. Output ONLY valid JSON — no explanation
+8. ALWAYS generate the `query_text` in English, even if the user's message is in another language (translate the search intent to English, as the memory database is monolingual English).
 
 

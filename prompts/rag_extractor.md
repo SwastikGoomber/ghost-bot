@@ -74,6 +74,7 @@ The length and density of the `summary` MUST be highly dynamic and tailored spec
 - **`fact` or `decisions`**: Keep it extremely direct, concise, and factual. A **single sentence** is preferred (e.g., `"User Swastik lives in room 303."` or `"The crew voted to postpone exploring deck 4 until tomorrow morning."`). Do NOT add background context, conversational fluff, or filler words.
 - **`conversation`, `relationship` or `character_development`**: Write a **single concise paragraph** (3–5 sentences) summarizing the main exchange, emotional dynamics, or behavioral developments. Focus on who spoke and the psychological/relationship shifts.
 - **`event`, `lore`, `worldbuilding` or `mysteries`**: Write **1–3 rich, detailed paragraphs** (4–10 sentences total) capturing the chronological flow of occurrences, background setup, setting revelations, or exact unresolved clues. Since we have a large context window, capture all crucial narrative context so the memory remains highly descriptive and self-contained.
+- **`language_fallback`**: If the source messages are in a language other than English, you MUST translate the conversations/facts and write the `summary` completely in English. All stored memory summaries must be monolingual English.
 
 ---
 

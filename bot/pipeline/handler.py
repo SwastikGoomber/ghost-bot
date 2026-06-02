@@ -111,6 +111,7 @@ async def process_message(
     image_urls: Optional[list[str]] = None,
     channel_context: Optional[list[ChannelContextMessage]] = None,
     reply_context: Optional[ChannelContextMessage] = None,
+    bypass_router: bool = False,
 ) -> str:
     """
     Orchestrate a complete message → response cycle.
@@ -125,6 +126,7 @@ async def process_message(
         image_urls:       Optional list of image attachment URLs (Discord only).
         channel_context:  Recent ambient messages from the current channel.
         reply_context:    Message being replied to, if any.
+        bypass_router:    If True, bypass the IntentRouter classification completely.
 
     Returns:
         A response string, already capped to the platform's max message length.
@@ -135,7 +137,10 @@ async def process_message(
     # ------------------------------------------------------------------
     # 1. Run the intent router (fast local classification)
     # ------------------------------------------------------------------
-    if platform == Platform.TWITCH and not cfg.twitch.enable_router:
+    if bypass_router:
+        logger.debug("Bypassing IntentRouter classification as requested (e.g. no_router channel).")
+        flags = RouterFlags(rag_required=False, cone_relevant=False)
+    elif platform == Platform.TWITCH and not cfg.twitch.enable_router:
         logger.debug("Bypassing IntentRouter classification for Twitch as configured.")
         flags = RouterFlags(rag_required=False, cone_relevant=False)
     else:

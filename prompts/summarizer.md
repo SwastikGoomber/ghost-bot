@@ -11,6 +11,7 @@ Analyze the above and create updated summaries. Important guidelines:
 - Focus on recurring patterns and relationship dynamics
 - Note any significant changes in tone or behavior
 - Remove outdated or irrelevant information
+- Always write both summaries in English, even if the new messages are in another language (translate the summary points to English).
 
 Provide updates in this exact format:
 

@@ -101,6 +101,7 @@ class ConeConfig:
     hourly_limit: int = 5
     autonomous_max_per_day: int = 2
     caveman_similarity_threshold: float = 0.7
+    no_cone_channel_ids: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -125,6 +126,7 @@ class DiscordConfig:
     global_context_message_limit: int = 30
     authorized_slash_user_ids: list[int] = field(default_factory=list)
     custom_emotes: list[CustomEmoteConfig] = field(default_factory=list)
+    no_router_channel_ids: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -257,6 +259,7 @@ def _load_config() -> Config:
         hourly_limit=int(cone_raw.get("hourly_limit", 5)),
         autonomous_max_per_day=int(cone_raw.get("autonomous_max_per_day", 2)),
         caveman_similarity_threshold=float(cone_raw.get("caveman_similarity_threshold", 0.7)),
+        no_cone_channel_ids=[int(i) for i in cone_raw.get("no_cone_channel_ids", [])],
     )
 
     # --- ollama ---
@@ -306,6 +309,7 @@ def _load_config() -> Config:
         global_context_message_limit=int(discord_raw.get("global_context_message_limit", 30)),
         authorized_slash_user_ids=[int(i) for i in discord_raw.get("authorized_slash_user_ids", [])],
         custom_emotes=_custom_emotes(discord_raw.get("custom_emotes", [])),
+        no_router_channel_ids=[int(i) for i in discord_raw.get("no_router_channel_ids", [])],
     )
 
     # --- twitch ---

@@ -114,6 +114,8 @@ class GhostDiscordBot(commands.Bot):
         # Cone check — applies to ALL messages, not just bot-addressed ones
         # ------------------------------------------------------------------
         is_coned, effect = await self._cone.is_coned(user_discord_id)
+        if is_coned and message.channel.id in cfg.cone.no_cone_channel_ids:
+            is_coned = False
 
         message_was_deleted = False
         if is_coned:
@@ -205,6 +207,7 @@ class GhostDiscordBot(commands.Bot):
                 image_urls=image_urls or None,
                 channel_context=channel_context,
                 reply_context=reply_context,
+                bypass_router=(message.channel.id in cfg.discord.no_router_channel_ids),
             )
 
         # ------------------------------------------------------------------
