@@ -92,10 +92,29 @@ class GhostTwitchBot(commands.Bot):
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def setup_hook(self) -> None:
-        """Subscribe to EventSub chat messages after login."""
+    async def event_oauth_authorized(self, payload: typing.Any) -> None:
+        """Called automatically when the user completes the OAuth flow."""
+        # The parent class handles saving the token to .tio.tokens.json
+        await super().event_oauth_authorized(payload)
+        logger.info("OAuth authorization successful! Retrying chat subscription...")
+        
+        # Now that we have a user token, retry the subscription
+        sub_payload = eventsub.ChatMessageSubscription(
+            broadcaster_user_id=self._broadcaster_id,
+            user_id=self.bot_id,
+        )
+        try:
+            await self.subscribe_websocket(payload=sub_payload)
+            logger.info("Successfully subscribed to Twitch chat messages!")
+        except Exception as exc:
+            logger.error("Failed to subscribe to Twitch chat after OAuth: %s", exc)
+
+    async def event_ready(self) -> None:
+        logger.info("Twitch bot ready | user=%s | bot_id=%s | channel=%s",
+                    self.user, self.bot_id, self._broadcaster_id)
+
         broadcaster_id = self._broadcaster_id
-        bot_id = self.bot_id  # reads from parent's _bot_id; will assert if not set
+        bot_id = self.bot_id
 
         if not broadcaster_id or not bot_id:
             logger.warning(
@@ -123,27 +142,6 @@ class GhostTwitchBot(commands.Bot):
                 )
             else:
                 logger.error("Failed to subscribe to Twitch chat: %s", exc)
-
-    async def event_oauth_authorized(self, payload: typing.Any) -> None:
-        """Called automatically when the user completes the OAuth flow."""
-        # The parent class handles saving the token to .tio.tokens.json
-        await super().event_oauth_authorized(payload)
-        logger.info("OAuth authorization successful! Retrying chat subscription...")
-        
-        # Now that we have a user token, retry the subscription
-        sub_payload = eventsub.ChatMessageSubscription(
-            broadcaster_user_id=self._broadcaster_id,
-            user_id=self.bot_id,
-        )
-        try:
-            await self.subscribe_websocket(payload=sub_payload)
-            logger.info("Successfully subscribed to Twitch chat messages!")
-        except Exception as exc:
-            logger.error("Failed to subscribe to Twitch chat after OAuth: %s", exc)
-
-    async def event_ready(self) -> None:
-        logger.info("Twitch bot ready | user=%s | bot_id=%s | channel=%s",
-                    self.user, self.bot_id, self._broadcaster_id)
 
     # ------------------------------------------------------------------
     # Message handling

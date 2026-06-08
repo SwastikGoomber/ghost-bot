@@ -151,9 +151,6 @@ discord:
       description: "Feeling extremely snug, warm, and comfortable, or happily settling in for a good rest."
       emote_visual: "Lilly smiling peacefully with her eyes closed, bundled up tightly in a soft purple hooded blanket."
 
-    - name: "<:Cozy~1:1211695347848581211>"
-      description: "Ghost feeling perfectly warm, sleepy, and safely bundled up."
-      emote_visual: "Ghost, looking incredibly sleepy and snug while wrapped tightly in a blue blanket with white stripes."
 
     - name: "<:CuteFrog:1364356053881327738>"
       description: "Expressing overwhelming adoration, cuteness overload, or looking at someone with big, pleading puppy-dog eyes."
