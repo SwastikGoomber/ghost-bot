@@ -104,7 +104,7 @@ class GhostTwitchBot(commands.Bot):
             user_id=self.bot_id,
         )
         try:
-            await self.subscribe_websocket(payload=sub_payload)
+            await self.subscribe_websocket(payload=sub_payload, as_bot=True)
             logger.info("Successfully subscribed to Twitch chat messages!")
         except Exception as exc:
             logger.error("Failed to subscribe to Twitch chat after OAuth: %s", exc)
@@ -129,7 +129,7 @@ class GhostTwitchBot(commands.Bot):
         )
 
         try:
-            await self.subscribe_websocket(payload=payload)
+            await self.subscribe_websocket(payload=payload, as_bot=True)
             logger.info("Subscribed to Twitch chat messages for channel %s.", broadcaster_id)
         except twitchio.HTTPException as exc:
             if exc.status == 403:
