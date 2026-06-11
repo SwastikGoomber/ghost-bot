@@ -67,6 +67,7 @@ class GeminiConfig:
     extraction: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.1, top_p=0.9, max_output_tokens=2000))
     arc_summary: GeminiGenerationConfig = field(default_factory=lambda: GeminiGenerationConfig(temperature=0.5, top_p=0.9, max_output_tokens=1500))
     paid_limits: GeminiPaidLimitsConfig = field(default_factory=GeminiPaidLimitsConfig)
+    enable_web_grounding: bool = False
 
 
 @dataclass
@@ -239,6 +240,7 @@ def _load_config() -> Config:
         extraction=_gen_cfg(gemini_raw.get("extraction", {}), default_temp=0.1, default_max=2000),
         arc_summary=_gen_cfg(gemini_raw.get("arc_summary", {}), default_temp=0.5, default_max=1500),
         paid_limits=paid_limits,
+        enable_web_grounding=bool(gemini_raw.get("enable_web_grounding", False)),
     )
 
     # --- memory ---

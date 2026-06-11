@@ -159,6 +159,7 @@ class GeminiClient(LLMClient):
         top_p: float = 0.9,
         max_output_tokens: int = 1000,
         thinking_budget: Optional[int] = None,
+        enable_web_grounding: bool = False,
     ) -> None:
         self.api_key_free = api_key_free
         self.api_key_paid = api_key_paid
@@ -166,6 +167,7 @@ class GeminiClient(LLMClient):
         self.role = role
         self.model = model
         self.thinking_budget = thinking_budget
+        self.enable_web_grounding = enable_web_grounding
         self._gen_config = types.GenerateContentConfig(
             temperature=temperature,
             top_p=top_p,
@@ -190,8 +192,15 @@ class GeminiClient(LLMClient):
         }
         if response_mime_type:
             config_args["response_mime_type"] = response_mime_type
-        if tools:
-            config_args["tools"] = tools
+
+        # Build tools list, adding Google Search grounding if enabled
+        resolved_tools = list(tools) if tools else []
+        if self.enable_web_grounding:
+            resolved_tools.append(types.Tool(google_search=types.GoogleSearch()))
+
+        if resolved_tools:
+            config_args["tools"] = resolved_tools
+
         if self.thinking_budget is not None and self.thinking_budget > 0:
             config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=self.thinking_budget)
 

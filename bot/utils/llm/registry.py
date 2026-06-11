@@ -75,6 +75,7 @@ def _get_cached_client(role: str) -> LLMClient:
             temperature=gen.temperature,
             top_p=gen.top_p,
             max_output_tokens=gen.max_output_tokens,
+            enable_web_grounding=cfg.gemini.enable_web_grounding if role == "chat" else False,
         )
 
     if role in ("router", "rag_planner", "cone_approval"):

@@ -21,6 +21,7 @@ gemini:
   paid_limits:
     max_chat_calls_per_day: 400
     max_total_calls_per_day: 500
+  enable_web_grounding: true  # Toggle Google Search web grounding for chat
 
   chat:
     temperature: 0.9
