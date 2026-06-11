@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -107,6 +108,33 @@ def _load_custom_emotes_template() -> str:
             "_custom_emotes_template_cache",
         )
     return _custom_emotes_template_cache
+
+
+# ---------------------------------------------------------------------------
+# Context builder helper
+# ---------------------------------------------------------------------------
+
+def _format_elapsed_time(delta: timedelta) -> str:
+    seconds = int(delta.total_seconds())
+    if seconds < 0:
+        return "just now"
+    if seconds < 10:
+        return "just now"
+    if seconds < 60:
+        return f"{seconds} seconds ago"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours} hour{'s' if hours > 1 else ''} ago"
+    days = hours // 24
+    remaining_hours = hours % 24
+    if days < 7:
+        if remaining_hours > 0:
+            return f"{days} day{'s' if days > 1 else ''}, {remaining_hours} hour{'s' if remaining_hours > 1 else ''} ago"
+        return f"{days} day{'s' if days > 1 else ''} ago"
+    return f"{days} day{'s' if days > 1 else ''} ago"
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +240,9 @@ class ContextBuilder:
             parts.append(_load_cone_hint())
             if recent_bot:
                 parts.append(_load_cone_hint_repetition())
+
+        # 12. Conversation session / timeline context
+        parts.append(self._build_timeline_context(user_state))
 
         return "\n\n".join(filter(None, parts))
 
@@ -330,3 +361,28 @@ class ContextBuilder:
                 found.add(self._variant_lookup[word])
 
         return list(found)
+
+    def _build_timeline_context(self, user_state: UserState) -> str:
+        """Create a timeline block showing current time and elapsed time since last message."""
+        now = datetime.now()
+        last_time = user_state.last_interaction
+        elapsed = now - last_time
+
+        now_str = now.strftime("%A, %B %d, %Y, %I:%M %p")
+        last_str = last_time.strftime("%A, %B %d, %Y, %I:%M %p")
+        elapsed_str = _format_elapsed_time(elapsed)
+
+        lines = [
+            "[CONVERSATION TIMELINE]",
+            f"Current Time: {now_str}",
+            f"User's Last Message: {last_str} ({elapsed_str})"
+        ]
+
+        # If elapsed is more than 8 hours, add a session transition note
+        if elapsed.total_seconds() > 8 * 3600:
+            lines.append(
+                "NOTE: A significant amount of time has passed since the user's last message. "
+                "Do not assume this is a direct continuation of the previous conversation unless the user's "
+                "new message context explicitly refers to it. Acknowledge the passage of time naturally if appropriate."
+            )
+        return "\n".join(lines)
