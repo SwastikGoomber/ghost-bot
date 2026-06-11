@@ -197,6 +197,9 @@ class GeminiClient(LLMClient):
         resolved_tools = list(tools) if tools else []
         if self.enable_web_grounding:
             resolved_tools.append(types.Tool(google_search=types.GoogleSearch()))
+            config_args["tool_config"] = types.ToolConfig(
+                include_server_side_tool_invocations=True
+            )
 
         if resolved_tools:
             config_args["tools"] = resolved_tools
